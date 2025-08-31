@@ -10,6 +10,7 @@ public:
     void ResetGame();
     int cellSize;
     int offset;
+
 private:
     Board board;
 };

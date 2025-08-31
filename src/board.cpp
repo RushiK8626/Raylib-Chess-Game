@@ -11,6 +11,7 @@ Board::Board(int cellSize, int offset) : simpleBoard(), cellSize(cellSize), offs
 {
     moved = LoadSound("sounds/move-self.wav");
     capture = LoadSound("sounds/capture.wav");
+    gameend = LoadSound("sound/game-end.wav");
     isWhiteMov = true;
     selectedPiece = nullptr;
     dragging = false;
@@ -46,6 +47,7 @@ Board::~Board()
     UnloadTexture(blackQueen);
     UnloadTexture(blackKing);
 
+    // Unload sounds
     if(moved.frameCount > 0) UnloadSound(moved);
     if(capture.frameCount > 0) UnloadSound(capture);
 }
@@ -106,7 +108,7 @@ void Board::InitializePieces()
 
 void Board::Update()
 {
-
+    // Undo on backspace button press (unchanged)
     if (IsKeyPressed(KEY_BACKSPACE))
     {
         Undo();
@@ -142,6 +144,8 @@ void Board::DrawPieces()
             }
         }
     }
+
+    // If piece is selected for move adjust its position according mouse position
     if (dragging && selectedPiece != nullptr)
     {
         Rectangle sourceRec = { 0, 0, (float)selectedPiece->getTexture().width, (float)selectedPiece->getTexture().height };
@@ -154,7 +158,6 @@ void Board::DrawPieces()
         Vector2 origin = { 0, 0 };
 
         DrawTexturePro(selectedPiece->getTexture(), sourceRec, destRec, origin, 0.0f, WHITE);
-        // DrawTexture(selectedPiece->getTexture(), mousePos.x - cellSize / 2, mousePos.y - cellSize / 2, WHITE);
     }
 }
 
@@ -162,9 +165,11 @@ void Board::Undo()
 {
     if (moveHistory.empty()) return;
 
+    // Remove last move from history vector
     MoveHistory lastMove = moveHistory.back();
     moveHistory.pop_back();
 
+    // Update the position to previous one on the board
     SetPiece(lastMove.startY, lastMove.startX, lastMove.movedPiece);
     if (lastMove.capturedPiece.id != 0) {
         SetPiece(lastMove.endY, lastMove.endX, lastMove.capturedPiece);
@@ -172,6 +177,7 @@ void Board::Undo()
         SetPiece(lastMove.endY, lastMove.endX);
     }
 
+    // Update castling flags after undoing the move
     whiteKingMoved = lastMove.prevWhiteKingMoved;
     blackKingMoved = lastMove.prevBlackKingMoved;
     whiteKingSideRookMoved = lastMove.prevWhiteKingsideRookMoved;
@@ -179,6 +185,7 @@ void Board::Undo()
     blackKingSideRookMoved = lastMove.prevBlackKingsideRookMoved;
     blackQueenSideRookMoved = lastMove.prevBlackQueensideRookMoved;
 
+    // Handle if move was castling move
     if (lastMove.wasCastlingMove) {
         if (lastMove.endX < lastMove.startX) {
             // Queenside castling - move rook back from column 3 to column 0
@@ -197,6 +204,8 @@ void Board::Undo()
     } else {  
         blackCastle = false;
     }
+
+    // Play sound and switch turn
     PlaySound(capture);
     switchTurn();
 }
@@ -241,8 +250,6 @@ void Board::handleMove()
                     return;
                 }
 
-                SaveState();
-
                 // Check for castling
                 checkCastelingAttempt(mouseX, mouseY);
                 
@@ -259,33 +266,14 @@ void Board::handleMove()
                 Piece tempBoard[8][8];
                 memcpy(tempBoard, board, sizeof(board));
 
+                // Simulate moves 
                 Piece movedPiece = *selectedPiece;
-                
+                Piece capturedPiece = GetPiece(mouseY, mouseX);
 
-                // Simulate Casteling if selected
-                if(casteling) {
-                    if((isWhiteMov && whiteCastle) || (!isWhiteMov && blackCastle)) 
-                    {
-                        dragging = false;
-                        casteling = false;
-                        selectedPiece = nullptr;
-                        return; // Player already did casteling
-                    }
-
-                    // Move king for simulation
-                    movedPiece.SetPosition(mouseX, mouseY);
-                    board[originalRow][originalCol] = Piece();
-                    board[mouseY][mouseX] = movedPiece;
-                    
-                    int rookFromCol = (isKingside) ? 7 : 0;
-                    int rookToCol = (isKingside) ? (mouseX - 1) : (mouseX + 1);
-
-                    // Simulate the rook movement
-                    Piece rook = board[mouseY][rookFromCol];
-                    board[mouseY][rookFromCol] = Piece();
-                    board[mouseY][rookToCol] = rook;
-                }
-                else {
+                // Simulate castling if selected
+                if(casteling) simulateCasteling(selectedPiece, movedPiece, mouseX, mouseY);
+                else 
+                {
                     // Normal moves
                     movedPiece.SetPosition(mouseX, mouseY);
                     board[originalRow][originalCol] = Piece();
@@ -315,17 +303,22 @@ void Board::handleMove()
                 switchTurn();
 
                 bool isCurrentCheckmate = IsCheckmate(isWhiteMov);
+                // Handle checkmate
                 if (isCurrentCheckmate)
                 {
+                    PlaySound(gameend);
                     printf("%s is in checkmate!\n", isWhiteMov ? "Black" : "White");
                     printf("Game Over\n");
-                    gameOver = true;
+                    gameOver = true; // Set gameover flag true
                     return;
                 }
                 else if (IsInCheck(isWhiteMov))
                 {
                     printf("%s is in check!\n", isWhiteMov ? "White" : "Black");
                 }
+                
+                playMoveSound(mouseX, mouseY, isCurrentCheckmate, capturedPiece.id != 0);
+
                 dragging = false;
                 selectedPiece = nullptr;
             }
@@ -336,18 +329,6 @@ void Board::handleMove()
         dragging = false;
         selectedPiece = nullptr;
     }
-}
-
-void Board::SaveState()
-{
-    std::vector<Piece> snapshot;
-    snapshot.reserve(64);
-    for(int i = 0; i < 8; ++i) {
-        for(int j = 0; j < 8; ++j) {
-            snapshot.push_back(board[i][j]);
-        }
-    }
-    boardHistory.push(snapshot);
 }
 
 void Board::switchTurn()
@@ -429,6 +410,7 @@ bool Board::IsCheckmate(bool whiteKing) const {
     return true;
 }
 
+// Execute the move
 void Board::ExecuteMove(Piece& movedPiece, int endX, int endY) 
 {
     Piece capturedPiece = GetPiece(endY, endX);
@@ -502,22 +484,19 @@ void Board::ExecuteMove(Piece& movedPiece, int endX, int endY)
         else if(!blackKingSideRookMoved && id == 1 && originalRow == 0 && originalCol == 7) blackKingSideRookMoved = true;
     }
 
-    // if(board[endY][endX].id != 0) PlaySound(capture);
-    if (capturedPiece.id != 0) PlaySound(capture);
-    else PlaySound(moved);
-
     moveHistory.push_back(move);
 }
 
-void Board::checkCastelingAttempt(int mouseX, int mouseY)
+// Check if castling attempt is valid
+void Board::checkCastelingAttempt(int endX, int endY)
 {
     casteling = false;
     // Check casteling attempted
     if (!IsInCheck(isWhiteMov) && (std::abs(selectedPiece->id) == 5 && ((isWhiteMov && !whiteCastle) || (!isWhiteMov && !blackCastle)))) // King
     {
-        if(mouseY == originalRow && ((isWhiteMov && selectedPiece->getRow() == 7) || (!isWhiteMov && selectedPiece->getRow() == 0))) {
-            if (originalCol - mouseX == 2) {isKingside = false, casteling = true;}
-            else if (mouseX - originalCol == 2) {isKingside = true, casteling = true;}
+        if(endY == originalRow && ((isWhiteMov && selectedPiece->getRow() == 7) || (!isWhiteMov && selectedPiece->getRow() == 0))) {
+            if (originalCol - endX == 2) {isKingside = false, casteling = true;}
+            else if (endX - originalCol == 2) {isKingside = true, casteling = true;}
         }
     }
 
@@ -526,6 +505,39 @@ void Board::checkCastelingAttempt(int mouseX, int mouseY)
     if(HasRookMoved(isWhiteMov, isKingside)) {casteling = false; return;}
 }
 
+void Board::simulateCasteling(Piece *selectedPiece, Piece &movedPiece, int endX, int endY) 
+{
+    if((isWhiteMov && whiteCastle) || (!isWhiteMov && blackCastle)) 
+    {
+        dragging = false;
+        casteling = false;
+        selectedPiece = nullptr;
+        return; // Player already did casteling
+    }
+
+    // Move king for simulation
+    movedPiece.SetPosition(endX, endY);
+    board[originalRow][originalCol] = Piece();
+    board[endY][endX] = movedPiece;
+    
+    int rookFromCol = (isKingside) ? 7 : 0;
+    int rookToCol = (isKingside) ? (endX - 1) : (endX + 1);
+
+    // Simulate the rook movement
+    Piece rook = board[endY][rookFromCol];
+    board[endY][rookFromCol] = Piece();
+    board[endY][rookToCol] = rook;
+}
+
+// Play move sounds
+void Board::playMoveSound(int endX, int endY, bool isCurrentCheckmate, bool isCapture)
+{
+    if(isCurrentCheckmate) PlaySound(gameend);
+    else if (isCapture) PlaySound(capture);
+    else PlaySound(moved);
+}
+
+// Setters
 void Board::SetPiece(int row, int col, Piece& piece)
 {
     piece.SetPosition(col, row);

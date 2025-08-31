@@ -81,9 +81,9 @@ void Game::ResetGame()
     }
     board.InitializePieces();
     // Clear move history
-    while (!board.boardHistory.empty())
+    while (!board.moveHistory.empty())
     {
-        board.boardHistory.pop();
+        board.moveHistory.pop_back();
     }
     board.gameOver = false;
 }

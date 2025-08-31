@@ -4,6 +4,7 @@
 Game::Game(int cellSize, int offset)
     : board(cellSize, offset), winner("NA")
 {
+    myFont = LoadFontEx("font/firasans.ttf", 32, 0, 0);
     Board board(cellSize, offset);
 }
 
@@ -45,17 +46,36 @@ void Game::DrawGameOverScreen()
     DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(), Fade(BLACK, 0.7f));
     if(winner != "NA")
     {
-        int textWidth = MeasureText("CHECKMATE", 50);
-        DrawText("CHECKMATE", (GetScreenWidth() - textWidth) / 2, GetScreenHeight() / 2 - 80, 50, RED);
+        // int textWidth = MeasureText("CHECKMATE", 50);
+        // DrawText("CHECKMATE", (GetScreenWidth() - textWidth) / 2, GetScreenHeight() / 2 - 80, 50, RED);
+        Vector2 textSize = MeasureTextEx(myFont, "CHECKMATE", 50, 2);
+        Vector2 pos = {
+            (GetScreenWidth() - textSize.x) / 2.0f, 
+            (GetScreenHeight() / 2.0f) - 80.0f
+        };
+        DrawTextEx(myFont, "CHECKMATE", pos, 50, 2, RED);
 
         std::string winnerText = winner + " Wins!";
-        textWidth = MeasureText(winnerText.c_str(), 30);
-        DrawText(winnerText.c_str(), (GetScreenWidth() - textWidth) / 2, GetScreenHeight() / 2 - 20, 30, WHITE);
+        // int textWidth = MeasureText(winnerText.c_str(), 30);
+        // DrawText(winnerText.c_str(), (GetScreenWidth() - textWidth) / 2, GetScreenHeight() / 2 - 20, 30, WHITE);
+        Vector2 winnerSize = MeasureTextEx(myFont, winnerText.c_str(), 30, 2);
+        Vector2 winnerPos = {
+            (GetScreenWidth() - winnerSize.x) / 2.0f,
+            (GetScreenHeight() / 2.0f) - 20.0f
+        };
+        DrawTextEx(myFont, winnerText.c_str(), winnerPos, 30, 2, WHITE);
+
     }
     else if (winner == "NA")
     {
-        int textWidth = MeasureText("DRAW", 50);
-        DrawText("DRAW", (GetScreenWidth() - textWidth) / 2, GetScreenHeight() / 2 - 80, 50, RED);
+        // int textWidth = MeasureText("DRAW", 50);
+        // DrawText("DRAW", (GetScreenWidth() - textWidth) / 2, GetScreenHeight() / 2 - 80, 50, RED);
+        Vector2 drawSize = MeasureTextEx(myFont, "DRAW", 50, 2);
+        Vector2 drawPos = {
+            (GetScreenWidth() - drawSize.x) / 2.0f,
+            (GetScreenHeight() / 2.0f) - 80.0f
+        };
+        DrawTextEx(myFont, "DRAW", drawPos, 50, 2, RED);
     }
     Rectangle btnRect = {
         (float)GetScreenWidth() / 2 - 60,
@@ -66,8 +86,14 @@ void Game::DrawGameOverScreen()
     DrawRectangleRounded(btnRect, 0.3f, 10, LIGHTGRAY);
     DrawRectangleLinesEx(btnRect, 2, DARKGRAY);
 
-    int textWidth = MeasureText("RESET", 25);
-    DrawText("RESET", btnRect.x + (btnRect.width - textWidth) / 2, btnRect.y + 10, 25, BLACK);
+    // int textWidth = MeasureText("RESET", 25);
+    // DrawText("RESET", btnRect.x + (btnRect.width - textWidth) / 2, btnRect.y + 10, 25, BLACK);
+    Vector2 resetSize = MeasureTextEx(myFont, "RESET", 25, 2);
+    Vector2 resetPos = {
+        btnRect.x + (btnRect.width - resetSize.x) / 2.0f,
+        btnRect.y + 10.0f
+    };
+    DrawTextEx(myFont, "RESET", resetPos, 25, 2, BLACK);
 
     if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON) && CheckCollisionPointRec(GetMousePosition(), btnRect))
     {

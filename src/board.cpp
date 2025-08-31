@@ -11,7 +11,7 @@ Board::Board(int cellSize, int offset) : simpleBoard(), cellSize(cellSize), offs
 {
     moved = LoadSound("sounds/move-self.wav");
     capture = LoadSound("sounds/capture.wav");
-    gameend = LoadSound("sound/game-end.wav");
+    gameend = LoadSound("sounds/game-end.wav");
     isWhiteMov = true;
     selectedPiece = nullptr;
     dragging = false;
@@ -19,6 +19,8 @@ Board::Board(int cellSize, int offset) : simpleBoard(), cellSize(cellSize), offs
     whiteCastle = false;
     blackCastle = false;
     isKingside = false;
+    isPawnPromotion = false;
+
     for (int row = 0; row < 8; ++row)
     {
         for (int col = 0; col < 8; ++col)
@@ -177,6 +179,8 @@ void Board::Undo()
         SetPiece(lastMove.endY, lastMove.endX);
     }
 
+    
+
     // Update castling flags after undoing the move
     whiteKingMoved = lastMove.prevWhiteKingMoved;
     blackKingMoved = lastMove.prevBlackKingMoved;
@@ -186,7 +190,8 @@ void Board::Undo()
     blackQueenSideRookMoved = lastMove.prevBlackQueensideRookMoved;
 
     // Handle if move was castling move
-    if (lastMove.wasCastlingMove) {
+    if (lastMove.wasCastlingMove) 
+    {
         if (lastMove.endX < lastMove.startX) {
             // Queenside castling - move rook back from column 3 to column 0
             Piece rook = GetPiece(lastMove.startY, 3);
@@ -198,11 +203,19 @@ void Board::Undo()
             SetPiece(lastMove.startY, 7, rook);
             SetPiece(lastMove.startY, 5);
         }
+
+        if (lastMove.movedPiece.id < 0) {  
+            whiteCastle = false;
+        } else {  
+            blackCastle = false;
+        }
     }
-    if (lastMove.movedPiece.id < 0) {  
-        whiteCastle = false;
-    } else {  
-        blackCastle = false;
+
+    else if(lastMove.wasPawnPromotion)
+    {
+        // Undo pawn promotion
+        SetPiece(lastMove.startY, lastMove.startX, lastMove.movedPiece);
+        SetPiece(lastMove.endY, lastMove.endX);
     }
 
     // Play sound and switch turn
@@ -252,12 +265,17 @@ void Board::handleMove()
 
                 // Check for castling
                 checkCastelingAttempt(mouseX, mouseY);
+
+                // Check for pawn promption
+                checkPawnPromotion(mouseX, mouseY);
                 
                 // Validate move based on piece rules
                 if (!selectedPiece->IsValidMove(originalCol, originalRow, mouseX, mouseY, *this))
                 {
                     selectedPiece->SetPosition(originalCol, originalRow);
                     dragging = false;
+                    casteling = false;
+                    isPawnPromotion = false;
                     selectedPiece = nullptr;
                     return;
                 }
@@ -432,6 +450,8 @@ void Board::ExecuteMove(Piece& movedPiece, int endX, int endY)
     move.prevBlackKingsideRookMoved = blackKingSideRookMoved;
     move.prevBlackQueensideRookMoved = blackQueenSideRookMoved;
 
+    move.wasPawnPromotion = isPawnPromotion;
+
     // Casteling move
     if(casteling) 
     {
@@ -464,6 +484,17 @@ void Board::ExecuteMove(Piece& movedPiece, int endX, int endY)
         }
         move.wasCastlingMove = true;
         casteling = false;
+    }
+
+    else if(isPawnPromotion) 
+    {
+        Piece promoted;
+        if (movedPiece.id < 0) promoted = Piece(whiteQueen, endX, endY, -4);
+        else promoted = Piece(blackQueen, endX, endY, 4);
+
+        board[originalRow][originalCol] = Piece();
+        board[endY][endX] = promoted;
+        move.promotedPiece = promoted;
     }
 
     else 
@@ -527,6 +558,17 @@ void Board::simulateCasteling(Piece *selectedPiece, Piece &movedPiece, int endX,
     Piece rook = board[endY][rookFromCol];
     board[endY][rookFromCol] = Piece();
     board[endY][rookToCol] = rook;
+}
+
+void Board::checkPawnPromotion(int endX, int endY) 
+{
+    int id = selectedPiece->id;
+    if(id != 6 && id != -6) return;
+
+    int targetRow = isWhiteMov ? 0 : 7;
+    if(endY != targetRow) return;
+
+    isPawnPromotion = true;
 }
 
 // Play move sounds

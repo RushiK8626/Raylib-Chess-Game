@@ -17,6 +17,7 @@ private:
     struct MoveHistory {
         int startX, startY, endX, endY;
         Piece movedPiece;
+        Piece promotedPiece;
         Piece capturedPiece;
         
         // castling flag states before the move
@@ -28,11 +29,14 @@ private:
         bool prevBlackQueensideRookMoved;
         
         bool wasCastlingMove; // Flag to identify castling moves
+        
+        bool wasPawnPromotion;
     };
 
     void LoadTextures();
     void DrawPieces();
-    void checkCastelingAttempt(int mouseX, int mouseY);
+    void checkCastelingAttempt(int endX, int endY);
+    void checkPawnPromotion(int endX, int endY);
     void ExecuteMove(Piece& movedPiece, int mouseX, int mouseY);
     void simulateCasteling(Piece *selectedPiece, Piece &movedPiece, int endX, int endY);
     void playMoveSound(int endX, int endY, bool isCurrentCheckmate, bool isCapture);
@@ -47,6 +51,7 @@ private:
     Vector2 mousePos;
     
     int originalRow, originalCol;
+    bool isPawnPromotion;
 
 public:
     Board(int cellSize, int offset);

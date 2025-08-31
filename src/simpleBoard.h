@@ -19,7 +19,8 @@ protected:
 
 public:
     simpleBoard();
-
+    virtual ~simpleBoard() = default;
+    
     bool casteling;
     bool whiteCastle;
     bool blackCastle;

@@ -21,16 +21,22 @@ private:
         Piece capturedPiece;
         
         // castling flag states before the move
-        bool prevWhiteKingMoved;
-        bool prevBlackKingMoved;
-        bool prevWhiteKingsideRookMoved;
-        bool prevWhiteQueensideRookMoved;
-        bool prevBlackKingsideRookMoved;
-        bool prevBlackQueensideRookMoved;
+        bool prevWhiteKingMoved = false;
+        bool prevBlackKingMoved = false;
+        bool prevWhiteKingsideRookMoved = false;
+        bool prevWhiteQueensideRookMoved = false;
+        bool prevBlackKingsideRookMoved = false;
+        bool prevBlackQueensideRookMoved = false;
         
-        bool wasCastlingMove; // Flag to identify castling moves
+        bool wasCastlingMove = false; // Flag to identify castling moves
+
+        // En Passant flags
+        bool wasEnPassant = false;
+        int enPassantCapturedRow = -1;
+        int enPassantCapturedCol = -1;
         
-        bool wasPawnPromotion;
+        // Pawn promotion flag
+        bool wasPawnPromotion = false;
     };
 
     void LoadTextures();
@@ -51,7 +57,9 @@ private:
     Vector2 mousePos;
     
     int originalRow, originalCol;
-    bool isPawnPromotion;
+    bool isPawnPromotion = false;
+
+    std::stack<std::vector<Piece>> boardHistory;
 
 public:
     Board(int cellSize, int offset);
@@ -60,18 +68,26 @@ public:
     int cellSize;
     int offset;
     bool gameOver;
+    bool victory = false;
+    bool draw = false;
     bool isWhiteMov;
-    bool isKingside;
-    bool dragging;
+    bool isKingside = false;
+    bool dragging = false;
+
+    int enPassantCol = -1;
+    int enPassantRow = -1;
+    bool enPassant = false;
+    bool enPassantCapture = false;
+
     Piece* selectedPiece;
 
     void InitializePieces();
     void Update();
     void Draw();
     void Undo();
+    void saveState();
     void handleMove();
     void switchTurn();
-    bool IsCheckmate(bool whiteKing) const;
     void SetPiece(int x, int y);
     void SetPiece(int x, int y, Piece& piece);
 

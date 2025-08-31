@@ -1,5 +1,6 @@
 #include "piece.h"
 #include "simpleBoard.h"
+#include "board.h"
 #include <cmath>
 #include <stdio.h>
 Piece::Piece() : id(0), texture({0}), col(0), row(0) {}
@@ -59,7 +60,7 @@ bool Piece::IsValidPawnMove(int startX, int startY, int endX, int endY, int id, 
         if (endY == startY + direction) return true;
         
         // Initial double move
-        if ((startY == 1 || startY == 6) && 
+        if (((id > 0 && startY == 1) || (id < 0 && startY == 6)) && 
             endY == startY + 2 * direction && 
             board.GetPiece(startY + direction, startX).id == 0) {
             return true;
@@ -72,6 +73,15 @@ bool Piece::IsValidPawnMove(int startX, int startY, int endX, int endY, int id, 
         destId != 0 && 
         destId * id < 0) {
         return true;
+    }
+
+    // en Passant capture check
+    Board* fullBoard = dynamic_cast<Board*>(const_cast<simpleBoard*>(&board));
+    if (fullBoard && std::abs(startX - endX) == 1 && endY == startY + direction && destId == 0) {
+        if (fullBoard->enPassantCol == endX && fullBoard->enPassantRow == endY) {
+            fullBoard->enPassantCapture = true;
+            return true;
+        }
     }
     return false;
 }

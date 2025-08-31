@@ -1,5 +1,6 @@
 #include "board.h"
 #include "piece.h"
+#include "endgame.h"
 #include <raylib.h>
 #include <iostream>
 #include<cstdlib>
@@ -16,10 +17,6 @@ Board::Board(int cellSize, int offset) : simpleBoard(), cellSize(cellSize), offs
     selectedPiece = nullptr;
     dragging = false;
     gameOver = false;
-    whiteCastle = false;
-    blackCastle = false;
-    isKingside = false;
-    isPawnPromotion = false;
 
     for (int row = 0; row < 8; ++row)
     {
@@ -171,15 +168,24 @@ void Board::Undo()
     MoveHistory lastMove = moveHistory.back();
     moveHistory.pop_back();
 
+    // Remove from past board history
+    if (!boardHistory.empty()) boardHistory.pop();
+
     // Update the position to previous one on the board
     SetPiece(lastMove.startY, lastMove.startX, lastMove.movedPiece);
-    if (lastMove.capturedPiece.id != 0) {
+
+    if(lastMove.wasEnPassant) 
+    {
+        SetPiece(lastMove.endY, lastMove.endX); // Remove the pawn from the destination square
+        SetPiece(lastMove.enPassantCapturedRow, lastMove.enPassantCapturedCol, lastMove.capturedPiece);
+    }
+    else if (lastMove.capturedPiece.id != 0) 
+    {
         SetPiece(lastMove.endY, lastMove.endX, lastMove.capturedPiece);
-    } else {
+    } else 
+    {
         SetPiece(lastMove.endY, lastMove.endX);
     }
-
-    
 
     // Update castling flags after undoing the move
     whiteKingMoved = lastMove.prevWhiteKingMoved;
@@ -313,6 +319,9 @@ void Board::handleMove()
     
                 // Restore board to previous state
                 memcpy(board, tempBoard, sizeof(board));
+                
+                // Save current board state
+                saveState();
 
                 // Perform the actual move
                 movedPiece = *selectedPiece;
@@ -320,7 +329,8 @@ void Board::handleMove()
 
                 switchTurn();
 
-                bool isCurrentCheckmate = IsCheckmate(isWhiteMov);
+                bool isCurrentCheckmate = IsCheckmate(static_cast<const Board&>(*this), isWhiteMov);
+                bool isCurrentStalemate = IsStalemate(static_cast<const Board&>(*this), isWhiteMov);
                 // Handle checkmate
                 if (isCurrentCheckmate)
                 {
@@ -328,6 +338,14 @@ void Board::handleMove()
                     printf("%s is in checkmate!\n", isWhiteMov ? "Black" : "White");
                     printf("Game Over\n");
                     gameOver = true; // Set gameover flag true
+                    victory = true;
+                    return;
+                }
+                else if (isCurrentStalemate) 
+                {
+                    printf("Stalemate! Game is a draw.\n");
+                    gameOver = true;
+                    draw = true;
                     return;
                 }
                 else if (IsInCheck(isWhiteMov))
@@ -335,10 +353,12 @@ void Board::handleMove()
                     printf("%s is in check!\n", isWhiteMov ? "White" : "Black");
                 }
                 
-                playMoveSound(mouseX, mouseY, isCurrentCheckmate, capturedPiece.id != 0);
+                playMoveSound(mouseX, mouseY, isCurrentCheckmate || isCurrentStalemate, capturedPiece.id != 0);
 
                 dragging = false;
                 selectedPiece = nullptr;
+                enPassant = false;
+                enPassantCapture = false;
             }
         }
     }
@@ -352,80 +372,6 @@ void Board::handleMove()
 void Board::switchTurn()
 {
     isWhiteMov = !isWhiteMov;
-}
-
-bool Board::IsCheckmate(bool whiteKing) const {
-    if (!IsInCheck(whiteKing))
-        return false;
-
-    int kingRow, kingCol;
-    if (!FindKingPosition(whiteKing, kingRow, kingCol))
-        return false;
-
-    int kingId = whiteKing ? -5 : 5;
-    
-    // Try moving the king
-    for (int dx = -1; dx <= 1; ++dx) {
-        for (int dy = -1; dy <= 1; ++dy) {
-            if (dx == 0 && dy == 0)
-                continue;
-
-            int newRow = kingRow + dy;
-            int newCol = kingCol + dx;
-
-            if (newRow >= 0 && newRow < 8 && newCol >= 0 && newCol < 8) {
-                const Piece& destPiece = board[newRow][newCol];
-                if (destPiece.id * kingId > 0)
-                    continue;
-
-                // Create a non-const copy for move simulation
-                simpleBoard tempBoard = static_cast<const simpleBoard&>(*this);
-                Piece& tempKing = tempBoard.board[kingRow][kingCol];
-                
-                // Move king on temporary board
-                tempBoard.board[newRow][newCol] = tempKing;
-                tempBoard.board[kingRow][kingCol] = Piece();
-                tempBoard.board[newRow][newCol].SetPosition(newCol, newRow);
-
-                if (!tempBoard.IsInCheck(whiteKing)) {
-                    return false;
-                }
-
-            }
-        }
-    }
-
-    // Try blocking or capturing with other pieces
-    for (int fromRow = 0; fromRow < 8; ++fromRow) {
-        for (int fromCol = 0; fromCol < 8; ++fromCol) {
-            const Piece& piece = board[fromRow][fromCol];
-            if (piece.id == 0) continue;
-
-            bool isPieceWhite = piece.id < 0;
-            if (isPieceWhite != whiteKing) continue;
-
-            for (int toRow = 0; toRow < 8; ++toRow) {
-                for (int toCol = 0; toCol < 8; ++toCol) {
-                    // Create a non-const copy for move simulation
-                    simpleBoard tempBoard = static_cast<const simpleBoard&>(*this);
-                    Piece& tempPiece = tempBoard.board[fromRow][fromCol];
-                    
-                    if (tempPiece.IsValidMove(fromCol, fromRow, toCol, toRow, tempBoard)) {
-                        // Simulate the move
-                        tempBoard.board[toRow][toCol] = tempPiece;
-                        tempBoard.board[fromRow][fromCol] = Piece();
-                        tempBoard.board[toRow][toCol].SetPosition(toCol, toRow);
-
-                        if (!tempBoard.IsInCheck(whiteKing)) {
-                            return false;
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    return true;
 }
 
 // Execute the move
@@ -495,6 +441,27 @@ void Board::ExecuteMove(Piece& movedPiece, int endX, int endY)
         board[originalRow][originalCol] = Piece();
         board[endY][endX] = promoted;
         move.promotedPiece = promoted;
+        isPawnPromotion = false;
+        PlaySound(capture);
+    }
+
+    else if(enPassantCapture)
+    {
+        if (abs(movedPiece.id) == 6 && enPassantCol == endX && enPassantRow == endY && board[endY][endX].id == 0) {
+            int capturedPawnRow = (movedPiece.id < 0) ? endY + 1 : endY - 1;
+            move.capturedPiece = GetPiece(capturedPawnRow, endX);
+            board[capturedPawnRow][endX] = Piece(); // Remove the captured pawn
+            // Move the pawn to the destination
+            movedPiece.SetPosition(endX, endY);
+            board[originalRow][originalCol] = Piece();
+            board[endY][endX] = movedPiece;
+            enPassant = false;
+            enPassantCapture = false;
+            move.wasEnPassant = true;
+            move.enPassantCapturedRow = (movedPiece.id < 0) ? endY + 1 : endY - 1;
+            move.enPassantCapturedCol = endX;
+            PlaySound(capture);
+        }
     }
 
     else 
@@ -503,6 +470,33 @@ void Board::ExecuteMove(Piece& movedPiece, int endX, int endY)
         movedPiece.SetPosition(endX, endY);
         board[originalRow][originalCol] = Piece();
         board[endY][endX] = movedPiece;
+        enPassant = false;
+        enPassantCapture = false;
+        // check for en passant if this is a pawn move
+        if (abs(movedPiece.id) == 6) 
+        {
+            // Check for pawn double move
+            if (abs(endY - originalRow) == 2) 
+            {
+                enPassantCol = endX;
+                enPassantRow = (originalRow + endY) / 2;
+                enPassant = true;
+                enPassantCapture = false;
+            } else 
+            {
+                enPassant = false;
+                enPassantCol = -1;
+                enPassantRow = -1;
+                enPassantCapture = false;
+            }
+        } 
+        else 
+        {
+            enPassant = false;
+            enPassantCapture = false;
+            enPassantCol = -1;
+            enPassantRow = -1;
+        }
 
         // Update some flags
         int id = movedPiece.id;
@@ -514,7 +508,6 @@ void Board::ExecuteMove(Piece& movedPiece, int endX, int endY)
         else if(!blackQueenSideRookMoved && id == 1 && originalRow == 0 && originalCol == 0) blackQueenSideRookMoved = true;
         else if(!blackKingSideRookMoved && id == 1 && originalRow == 0 && originalCol == 7) blackKingSideRookMoved = true;
     }
-
     moveHistory.push_back(move);
 }
 
@@ -577,6 +570,16 @@ void Board::playMoveSound(int endX, int endY, bool isCurrentCheckmate, bool isCa
     if(isCurrentCheckmate) PlaySound(gameend);
     else if (isCapture) PlaySound(capture);
     else PlaySound(moved);
+}
+
+void Board::saveState()
+{
+    std::vector<Piece> snapshot;
+    snapshot.reserve(64);
+    for (int row = 0; row < 8; ++row)
+        for (int col = 0; col < 8; ++col)
+            snapshot.push_back(board[row][col]);
+    boardHistory.push(snapshot);
 }
 
 // Setters

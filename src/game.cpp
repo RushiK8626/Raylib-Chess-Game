@@ -2,7 +2,7 @@
 #include "board.h"
 
 Game::Game(int cellSize, int offset)
-    : board(cellSize, offset) 
+    : board(cellSize, offset), winner("NA")
 {
     Board board(cellSize, offset);
 }
@@ -16,36 +16,47 @@ void Game::Run()
     board.Draw();
     if (board.gameOver)
     {
-        HandleGameOver(true);
+        HandleGameOver();
     }
 }
 
 
-void Game::HandleGameOver(bool isCheckmate)
+void Game::HandleGameOver()
 {
-    if (isCheckmate)
+    if (board.victory)
     {
-        std::string winner = board.isWhiteMov ? "Black" : "White";
+        winner = board.isWhiteMov ? "Black" : "White";
         // Disable further moves
         board.gameOver = true;
-
-        DrawGameOverScreen(winner);
+        board.victory = true;
+        DrawGameOverScreen();
+    }
+    else if(board.draw)
+    {
+        winner = "NA";
+        DrawGameOverScreen();
     }
     else board.gameOver = false;
 }
 
-void Game::DrawGameOverScreen(std::string &winner)
+void Game::DrawGameOverScreen()
 {
     // Draw an opaque background
     DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(), Fade(BLACK, 0.7f));
+    if(winner != "NA")
+    {
+        int textWidth = MeasureText("CHECKMATE", 50);
+        DrawText("CHECKMATE", (GetScreenWidth() - textWidth) / 2, GetScreenHeight() / 2 - 80, 50, RED);
 
-    int textWidth = MeasureText("CHECKMATE", 50);
-    DrawText("CHECKMATE", (GetScreenWidth() - textWidth) / 2, GetScreenHeight() / 2 - 80, 50, RED);
-
-    std::string winnerText = winner + " Wins!";
-    textWidth = MeasureText(winnerText.c_str(), 30);
-    DrawText(winnerText.c_str(), (GetScreenWidth() - textWidth) / 2, GetScreenHeight() / 2 - 20, 30, WHITE);
-
+        std::string winnerText = winner + " Wins!";
+        textWidth = MeasureText(winnerText.c_str(), 30);
+        DrawText(winnerText.c_str(), (GetScreenWidth() - textWidth) / 2, GetScreenHeight() / 2 - 20, 30, WHITE);
+    }
+    else if (winner == "NA")
+    {
+        int textWidth = MeasureText("DRAW", 50);
+        DrawText("DRAW", (GetScreenWidth() - textWidth) / 2, GetScreenHeight() / 2 - 80, 50, RED);
+    }
     Rectangle btnRect = {
         (float)GetScreenWidth() / 2 - 60,
         (float)GetScreenHeight() / 2 + 80,
@@ -55,7 +66,7 @@ void Game::DrawGameOverScreen(std::string &winner)
     DrawRectangleRounded(btnRect, 0.3f, 10, LIGHTGRAY);
     DrawRectangleLinesEx(btnRect, 2, DARKGRAY);
 
-    textWidth = MeasureText("RESET", 25);
+    int textWidth = MeasureText("RESET", 25);
     DrawText("RESET", btnRect.x + (btnRect.width - textWidth) / 2, btnRect.y + 10, 25, BLACK);
 
     if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON) && CheckCollisionPointRec(GetMousePosition(), btnRect))
@@ -63,7 +74,6 @@ void Game::DrawGameOverScreen(std::string &winner)
         ResetGame();
     }
 }
-
 
 void Game::ResetGame()
 {

@@ -62,6 +62,13 @@
 		"cinttypes": "cpp",
 		"typeinfo": "cpp",
 		"variant": "cpp",
-		"valarray": "cpp"
+		"valarray": "cpp",
+		"chrono": "cpp",
+		"ratio": "cpp",
+		"iomanip": "cpp",
+		"semaphore": "cpp",
+		"sstream": "cpp",
+		"stop_token": "cpp",
+		"thread": "cpp"
 	}
 }

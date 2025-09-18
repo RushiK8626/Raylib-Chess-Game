@@ -1,8 +1,9 @@
 #include "piece.h"
 #include "simpleBoard.h"
 #include "board.h"
+#include "constants.h"
 #include <cmath>
-#include <stdio.h>
+
 Piece::Piece() : id(0), texture({0}), col(0), row(0) {}
 
 Piece::Piece(Texture2D texture, int col, int row, int id) :  id(id), texture(texture), col(col), row(row) {}
@@ -11,10 +12,10 @@ void Piece::Draw()
 {
     Rectangle sourceRec = { 0, 0, (float)texture.width, (float)texture.height };
     Rectangle destRec = {
-        static_cast<float>(col * cellSize + offset + 10), 
-        static_cast<float>(row * cellSize + offset + 10), 
-        static_cast<float>(cellSize - 20), 
-        static_cast<float>(cellSize - 20) 
+        static_cast<float>(col * CELL_SIZE + OFFSET + 10),
+        static_cast<float>(row * CELL_SIZE + OFFSET + 10),
+        static_cast<float>(CELL_SIZE - 20),
+        static_cast<float>(CELL_SIZE - 20)
     };
     Vector2 origin = { 0, 0 };
 

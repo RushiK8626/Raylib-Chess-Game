@@ -19,7 +19,7 @@ public:
     bool IsValidMove(int startX, int startY, int endX, int endY, const simpleBoard& board) const;
 
     int id;
-    static const int cellSize = 60;
+    static const int cellSize = 80;
     static const int offset = 30;
 
 private:

@@ -1,14 +1,16 @@
+#include <raylib.h>
+#include <cstdlib>
+#include <stack>
+#include <string>
 #include "board.h"
 #include "piece.h"
 #include "endgame.h"
-#include <raylib.h>
-#include <iostream>
-#include<cstdlib>
-#include <stdio.h>
-#include <stack>
-#include <string>
+#include "fenGenerator.h"
+#include "constants.h"
 
-Board::Board(int cellSize, int offset) : simpleBoard(), cellSize(cellSize), offset(offset)
+Board::Board(HomeScreen::Mode mode)
+    : simpleBoard(),
+      mode(mode)
 {
     moved = LoadSound("sounds/move-self.wav");
     capture = LoadSound("sounds/capture.wav");
@@ -27,7 +29,16 @@ Board::Board(int cellSize, int offset) : simpleBoard(), cellSize(cellSize), offs
     }
     LoadTextures();
     InitializePieces();
+    if(mode == HomeScreen::Mode::VS_ENGINE_BLACK || mode == HomeScreen::Mode::VS_ENGINE_WHITE) 
+    {
+        engine = std::make_unique<Stockfish>("../stockfish/stockfish.exe"); //Use absolute or relative path to stockfish executable here
+        userColor = (mode == HomeScreen::Mode::VS_ENGINE_WHITE) ? true : false;
+        startEngine();
+    }
+    fen = fenGenerator::generateFEN(*this);
+    positionHistory[fen]++;
 }
+
 
 Board::~Board()
 {
@@ -107,11 +118,6 @@ void Board::InitializePieces()
 
 void Board::Update()
 {
-    // Undo on backspace button press (unchanged)
-    if (IsKeyPressed(KEY_BACKSPACE))
-    {
-        Undo();
-    }
     handleMove();
 }
 
@@ -123,9 +129,9 @@ void Board::Draw()
         {
             Color cellColor = (row + column) % 2 == 0 ? green : beige;
             DrawRectangle(
-                offset + column * cellSize,
-                offset + row * cellSize,
-                cellSize, cellSize, cellColor);
+                OFFSET + column * CELL_SIZE,
+                OFFSET + row * CELL_SIZE,
+                CELL_SIZE, CELL_SIZE, cellColor);
         }
     }
     DrawPieces();
@@ -149,10 +155,10 @@ void Board::DrawPieces()
     {
         Rectangle sourceRec = { 0, 0, (float)selectedPiece->getTexture().width, (float)selectedPiece->getTexture().height };
         Rectangle destRec = {
-            static_cast<float>(mousePos.x - cellSize / 2), 
-            static_cast<float>(mousePos.y - cellSize / 2), 
-            static_cast<float>(cellSize - 20), 
-            static_cast<float>(cellSize - 20) 
+            static_cast<float>(mousePos.x - CELL_SIZE / 2), 
+            static_cast<float>(mousePos.y - CELL_SIZE / 2), 
+            static_cast<float>(CELL_SIZE - 20), 
+            static_cast<float>(CELL_SIZE - 20) 
         };
         Vector2 origin = { 0, 0 };
 
@@ -165,11 +171,14 @@ void Board::Undo()
     if (moveHistory.empty()) return;
 
     // Remove last move from history vector
+    if (moveHistory.back().movedPiece.id > 0) moveHistory.pop_back();
     MoveHistory lastMove = moveHistory.back();
     moveHistory.pop_back();
 
     // Remove from past board history
     if (!boardHistory.empty()) boardHistory.pop();
+
+    positionHistory[fenGenerator::generateFEN(*this)]--;
 
     // Update the position to previous one on the board
     SetPiece(lastMove.startY, lastMove.startX, lastMove.movedPiece);
@@ -187,6 +196,9 @@ void Board::Undo()
         SetPiece(lastMove.endY, lastMove.endX);
     }
 
+    halfMovesCounter = lastMove.halfMoves;
+    fullMovesCounter = lastMove.fullMoves;
+
     // Update castling flags after undoing the move
     whiteKingMoved = lastMove.prevWhiteKingMoved;
     blackKingMoved = lastMove.prevBlackKingMoved;
@@ -194,6 +206,8 @@ void Board::Undo()
     whiteQueenSideRookMoved = lastMove.prevWhiteQueensideRookMoved;
     blackKingSideRookMoved = lastMove.prevBlackKingsideRookMoved;
     blackQueenSideRookMoved = lastMove.prevBlackQueensideRookMoved;
+
+    fen = lastMove.prevFEN;
 
     // Handle if move was castling move
     if (lastMove.wasCastlingMove) 
@@ -231,141 +245,123 @@ void Board::Undo()
 
 void Board::handleMove()
 {
-    mousePos = GetMousePosition();
-    int mouseX = (mousePos.x - offset) / cellSize;
-    int mouseY = (mousePos.y - offset) / cellSize;
-
-    // Check if mouse is within board bounds
-    if (mouseX >= 0 && mouseX < 8 && mouseY >= 0 && mouseY < 8)
+    if((mode == HomeScreen::Mode::VS_ENGINE_WHITE && !isWhiteMov)|| (mode == HomeScreen::Mode::VS_ENGINE_BLACK && isWhiteMov))
     {
-        if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON))
-        {
-            Piece &clickedPiece = board[mouseY][mouseX];
+        std::string uciMove = getStockfishMove();
+        makeEngineMove(uciMove);
+    }
+    else
+    {
+        mousePos = GetMousePosition();
+        int mouseX = (mousePos.x - OFFSET) / CELL_SIZE;
+        int mouseY = (mousePos.y - OFFSET) / CELL_SIZE;
 
-            if (clickedPiece.id != 0) // Check if a piece exists
+        // Check if mouse is within board bounds
+        if (mouseX >= 0 && mouseX < 8 && mouseY >= 0 && mouseY < 8)
+        {
+            if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON))
             {
-                // Validate piece color turn
-                bool isWhitePiece = clickedPiece.id < 0;
-                if ((isWhitePiece && isWhiteMov) || (!isWhitePiece && !isWhiteMov))
+                Piece &clickedPiece = board[mouseY][mouseX];
+
+                if (clickedPiece.id != 0) // Check if a piece exists
                 {
+
                     selectedPiece = &clickedPiece;
                     originalRow = mouseY;
                     originalCol = mouseX;
                     dragging = true;
                 }
             }
-        }
 
-        if (IsMouseButtonReleased(MOUSE_LEFT_BUTTON) && selectedPiece != nullptr)
-        {
-            if (mouseX >= 0 && mouseX < 8 && mouseY >= 0 && mouseY < 8)
+            if (IsMouseButtonReleased(MOUSE_LEFT_BUTTON) && selectedPiece != nullptr)
             {
-                // Prevent moving opponent's pieces
-                if ((selectedPiece->id < 0 && !isWhiteMov) || (selectedPiece->id > 0 && isWhiteMov))
+                if (mouseX >= 0 && mouseX < 8 && mouseY >= 0 && mouseY < 8)
                 {
-                    selectedPiece->SetPosition(originalCol, originalRow);
-                    dragging = false;
-                    selectedPiece = nullptr;
-                    return;
-                }
+                    // Prevent moving opponent's pieces
+                    if ((selectedPiece->id < 0 && !isWhiteMov) || (selectedPiece->id > 0 && isWhiteMov))
+                    {
+                        selectedPiece->SetPosition(originalCol, originalRow);
+                        dragging = false;
+                        selectedPiece = nullptr;
+                        return;
+                    }
+                    // Check for castling
+                    checkCastelingAttempt(mouseX, mouseY);
 
-                // Check for castling
-                checkCastelingAttempt(mouseX, mouseY);
+                    // Check for pawn promption
+                    checkPawnPromotion(mouseX, mouseY);
+                    
+                    // Validate move based on piece rules
+                    if (!selectedPiece->IsValidMove(originalCol, originalRow, mouseX, mouseY, *this))
+                    {
+                        selectedPiece->SetPosition(originalCol, originalRow);
+                        dragging = false;
+                        casteling = false;
+                        isPawnPromotion = false;
+                        selectedPiece = nullptr;
+                        return;
+                    }
+                    
+                    // Simulate move to check for self-check
+                    Piece tempBoard[8][8];
+                    memcpy(tempBoard, board, sizeof(board));
 
-                // Check for pawn promption
-                checkPawnPromotion(mouseX, mouseY);
-                
-                // Validate move based on piece rules
-                if (!selectedPiece->IsValidMove(originalCol, originalRow, mouseX, mouseY, *this))
-                {
-                    selectedPiece->SetPosition(originalCol, originalRow);
-                    dragging = false;
-                    casteling = false;
-                    isPawnPromotion = false;
-                    selectedPiece = nullptr;
-                    return;
-                }
-                
-                // Simulate move to check for self-check
-                Piece tempBoard[8][8];
-                memcpy(tempBoard, board, sizeof(board));
+                    // Simulate moves 
+                    Piece movedPiece = *selectedPiece;
+                    // Piece capturedPiece = GetPiece(mouseY, mouseX);
 
-                // Simulate moves 
-                Piece movedPiece = *selectedPiece;
-                Piece capturedPiece = GetPiece(mouseY, mouseX);
+                    // Simulate castling if selected
+                    if(casteling) simulateCasteling(selectedPiece, movedPiece, mouseX, mouseY);
+                    else 
+                    {
+                        // Normal moves
+                        movedPiece.SetPosition(mouseX, mouseY);
+                        board[originalRow][originalCol] = Piece();
+                        board[mouseY][mouseX] = movedPiece;
+                    }
 
-                // Simulate castling if selected
-                if(casteling) simulateCasteling(selectedPiece, movedPiece, mouseX, mouseY);
-                else 
-                {
-                    // Normal moves
-                    movedPiece.SetPosition(mouseX, mouseY);
-                    board[originalRow][originalCol] = Piece();
-                    board[mouseY][mouseX] = movedPiece;
-                }
+                    // Check if move puts own king in check
+                    bool kingInCheck = IsInCheck(isWhiteMov);
 
-                // Check if move puts own king in check
-                bool kingInCheck = IsInCheck(isWhiteMov);
-
-                if (kingInCheck)
-                {
-                    selectedPiece->SetPosition(originalCol, originalRow);
-                    dragging = false;
-                    casteling = false;
-                    selectedPiece = nullptr;
+                    if (kingInCheck)
+                    {
+                        selectedPiece->SetPosition(originalCol, originalRow);
+                        dragging = false;
+                        casteling = false;
+                        selectedPiece = nullptr;
+                        memcpy(board, tempBoard, sizeof(board));
+                        return;
+                    }
+        
+                    // Restore board to previous state
                     memcpy(board, tempBoard, sizeof(board));
-                    return;
+
+                    // Perform the actual move
+                    movedPiece = *selectedPiece;
+                    int capturedPieceId = board[mouseY][mouseX].id;
+
+                    ExecuteMove(movedPiece, mouseX, mouseY);
+
+                    afterMoveHandle(mouseX, mouseY, capturedPieceId);
                 }
-    
-                // Restore board to previous state
-                memcpy(board, tempBoard, sizeof(board));
-                
-                // Save current board state
-                saveState();
-
-                // Perform the actual move
-                movedPiece = *selectedPiece;
-                ExecuteMove(movedPiece, mouseX, mouseY);
-
-                switchTurn();
-
-                bool isCurrentCheckmate = IsCheckmate(static_cast<const Board&>(*this), isWhiteMov);
-                bool isCurrentStalemate = IsStalemate(static_cast<const Board&>(*this), isWhiteMov);
-                // Handle checkmate
-                if (isCurrentCheckmate)
+                else
                 {
-                    PlaySound(gameend);
-                    printf("%s is in checkmate!\n", isWhiteMov ? "Black" : "White");
-                    printf("Game Over\n");
-                    gameOver = true; // Set gameover flag true
-                    victory = true;
-                    return;
+                    // Prevent moving opponent's pieces
+                    if ((selectedPiece->id < 0 && !isWhiteMov) || (selectedPiece->id > 0 && isWhiteMov))
+                    {
+                        selectedPiece->SetPosition(originalCol, originalRow);
+                        dragging = false;
+                        selectedPiece = nullptr;
+                        return;
+                    }
                 }
-                else if (isCurrentStalemate) 
-                {
-                    printf("Stalemate! Game is a draw.\n");
-                    gameOver = true;
-                    draw = true;
-                    return;
-                }
-                else if (IsInCheck(isWhiteMov))
-                {
-                    printf("%s is in check!\n", isWhiteMov ? "White" : "Black");
-                }
-                
-                playMoveSound(mouseX, mouseY, isCurrentCheckmate || isCurrentStalemate, capturedPiece.id != 0);
-
-                dragging = false;
-                selectedPiece = nullptr;
-                enPassant = false;
-                enPassantCapture = false;
             }
         }
-    }
-    else if (IsMouseButtonReleased(MOUSE_LEFT_BUTTON))
-    {
-        dragging = false;
-        selectedPiece = nullptr;
+        else if (IsMouseButtonReleased(MOUSE_LEFT_BUTTON))
+        {
+            dragging = false;
+            selectedPiece = nullptr;
+        }
     }
 }
 
@@ -397,6 +393,14 @@ void Board::ExecuteMove(Piece& movedPiece, int endX, int endY)
     move.prevBlackQueensideRookMoved = blackQueenSideRookMoved;
 
     move.wasPawnPromotion = isPawnPromotion;
+
+    move.halfMoves = halfMovesCounter;
+    move.fullMoves = fullMovesCounter;
+
+    move.prevFEN = fen;
+
+    halfMovesCounter++;
+    fullMovesCounter++;
 
     // Casteling move
     if(casteling) 
@@ -430,18 +434,22 @@ void Board::ExecuteMove(Piece& movedPiece, int endX, int endY)
         }
         move.wasCastlingMove = true;
         casteling = false;
+        halfMovesCounter++;
     }
 
     else if(isPawnPromotion) 
     {
         Piece promoted;
+        Piece capturedPiece = GetPiece(endY, endX);
         if (movedPiece.id < 0) promoted = Piece(whiteQueen, endX, endY, -4);
         else promoted = Piece(blackQueen, endX, endY, 4);
 
         board[originalRow][originalCol] = Piece();
         board[endY][endX] = promoted;
         move.promotedPiece = promoted;
+        move.capturedPiece = capturedPiece;
         isPawnPromotion = false;
+        halfMovesCounter = 0;
         PlaySound(capture);
     }
 
@@ -460,6 +468,7 @@ void Board::ExecuteMove(Piece& movedPiece, int endX, int endY)
             move.wasEnPassant = true;
             move.enPassantCapturedRow = (movedPiece.id < 0) ? endY + 1 : endY - 1;
             move.enPassantCapturedCol = endX;
+            halfMovesCounter = 0;
             PlaySound(capture);
         }
     }
@@ -472,6 +481,7 @@ void Board::ExecuteMove(Piece& movedPiece, int endX, int endY)
         board[endY][endX] = movedPiece;
         enPassant = false;
         enPassantCapture = false;
+
         // check for en passant if this is a pawn move
         if (abs(movedPiece.id) == 6) 
         {
@@ -489,6 +499,7 @@ void Board::ExecuteMove(Piece& movedPiece, int endX, int endY)
                 enPassantRow = -1;
                 enPassantCapture = false;
             }
+            halfMovesCounter = 0;
         } 
         else 
         {
@@ -497,6 +508,9 @@ void Board::ExecuteMove(Piece& movedPiece, int endX, int endY)
             enPassantCol = -1;
             enPassantRow = -1;
         }
+
+        if(capturedPiece.id != 0) halfMovesCounter = 0;
+
 
         // Update some flags
         int id = movedPiece.id;
@@ -509,6 +523,40 @@ void Board::ExecuteMove(Piece& movedPiece, int endX, int endY)
         else if(!blackKingSideRookMoved && id == 1 && originalRow == 0 && originalCol == 7) blackKingSideRookMoved = true;
     }
     moveHistory.push_back(move);
+}
+
+void Board::afterMoveHandle(int endX, int endY, int capturedPieceId)
+{
+    // Save current board state
+    switchTurn();
+
+    fen = fenGenerator::generateFEN(*this);
+    positionHistory[fen]++;
+
+    bool isCurrentCheckmate = IsCheckmate(static_cast<const Board&>(*this), isWhiteMov);
+    bool isCurrentStalemate = IsStalemate(static_cast<const Board&>(*this), isWhiteMov);
+    // Handle checkmate
+    if (isCurrentCheckmate)
+    {
+        PlaySound(gameend);
+        gameOver = true; // Set gameover flag true
+        victory = true;
+        return;
+    }
+    else if (isCurrentStalemate) 
+    {
+        PlaySound(gameend);
+        gameOver = true;
+        draw = true;
+        return;
+    }
+    
+    playMoveSound(endX, endY, capturedPieceId != 0);
+
+    dragging = false;
+    selectedPiece = nullptr;
+    enPassant = false;
+    enPassantCapture = false;
 }
 
 // Check if castling attempt is valid
@@ -565,10 +613,9 @@ void Board::checkPawnPromotion(int endX, int endY)
 }
 
 // Play move sounds
-void Board::playMoveSound(int endX, int endY, bool isCurrentCheckmate, bool isCapture)
+void Board::playMoveSound(int endX, int endY, bool isCapture)
 {
-    if(isCurrentCheckmate) PlaySound(gameend);
-    else if (isCapture) PlaySound(capture);
+    if (isCapture) PlaySound(capture);
     else PlaySound(moved);
 }
 
@@ -592,4 +639,92 @@ void Board::SetPiece(int row, int col, Piece& piece)
 void Board::SetPiece(int row, int col)
 {
     board[row][col] = Piece();
+}
+
+void Board::startEngine()
+{
+    // Initialize UCI once at startup (engine process persists)
+    engine->sendCommand("uci\n");
+    {
+        const std::string r = engine->readResponse();
+        isEngineRunning = (r.find("uciok") != std::string::npos);
+    }
+    // Start with a clean engine state; don't start a search until it's the engine's turn
+    engine->sendCommand("ucinewgame\n");
+    engine->sendCommand("isready\n");
+    engine->readResponse(); // expect readyok
+}
+
+std::string Board::getStockfishMove()
+{
+    try
+    {
+        // Ensure previous searches are stopped and engine is ready
+        engine->sendCommand("stop\n");
+        engine->sendCommand("isready\n");
+        engine->readResponse();
+
+        // Set exact position from FEN (includes side to move) and ask for best move
+        engine->sendCommand("position fen " + fen + "\n");
+        // Choose one: movetime or depth; movetime is safer with GUI frame loop
+        engine->sendCommand("go depth 20\n");
+
+        std::string resp = engine->readResponse();
+        // Extract just the move after "bestmove " if present
+        std::string bestMove = resp;
+        const std::string prefix = "bestmove ";
+        auto pos = resp.find(prefix);
+        if (pos != std::string::npos) {
+            auto end = resp.find_first_of(" \n\r\t", pos + prefix.size());
+            if (end != std::string::npos) bestMove = resp.substr(pos + prefix.size(), end - (pos + prefix.size()));
+            else bestMove = resp.substr(pos + prefix.size());
+        }
+        return bestMove;
+    }
+    catch(const std::exception& e)
+    {
+        std::cerr << e.what() << '\n';
+        return "";
+    }
+}
+
+// Convert UCI like "e2e4" → startX, startY, endX, endY
+bool Board::uciToCoords(const std::string& move, int &startX, int &startY, int &endX, int &endY) {
+    if (move.size() < 4) return false;
+
+    startX = move[0] - 'a';           // 'a'->0, 'b'->1
+    startY = 8 - (move[1] - '0');    // '1'->7, '2'->6
+    endX = move[2] - 'a';
+    endY = 8 - (move[3] - '0');
+
+    return true;
+}
+
+
+void Board::makeEngineMove(const std::string& uciMove) {
+    int startX, startY, endX, endY;
+    if(!uciToCoords(uciMove, startX, startY, endX, endY)) return;
+
+    // Work on a copy to avoid aliasing the board cell that we clear inside ExecuteMove
+    Piece movedPiece = board[startY][startX];
+    if (movedPiece.id == 0) return; // No piece abort
+
+    // Safety: ensure engine moves the correct color for the current turn
+    if ((isWhiteMov && movedPiece.id >= 0) || (!isWhiteMov && movedPiece.id <= 0)) {
+        // The UCI move doesn't match side to move; ignore
+        return;
+    }
+    selectedPiece = &movedPiece;
+
+    // Set source for ExecuteMove bookkeeping
+    originalCol = startX;
+    originalRow = startY;
+
+    checkCastelingAttempt(endX, endY);
+    checkPawnPromotion(endX, endY);
+
+    int capturedPieceId = board[endY][endX].id;
+    ExecuteMove(movedPiece, endX, endY);
+
+    afterMoveHandle(endX, endY, capturedPieceId);
 }

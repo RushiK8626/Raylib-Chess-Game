@@ -1,16 +1,21 @@
 #pragma once
 #include "board.h"
+#include "home.h"
+
+class HomeScreen; 
+
 class Game
 {
 public:
-    Game(int cellSize, int offset);
+    Game(HomeScreen::Mode mode);
     void Run();
     void HandleGameOver();
     void DrawGameOverScreen();
     void ResetGame();
-    int cellSize;
-    int offset;
+    bool matchRunning;
     std::string winner;
+
 private:
     Board board;
+    Font myFont;
 };

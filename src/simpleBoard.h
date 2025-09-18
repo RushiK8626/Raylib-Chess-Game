@@ -7,12 +7,6 @@ class Piece;
 
 class simpleBoard {
 protected:
-    bool whiteQueenSideRookMoved;
-    bool whiteKingSideRookMoved;
-    bool blackQueenSideRookMoved;
-    bool blackKingSideRookMoved;
-    bool whiteKingMoved;
-    bool blackKingMoved;
 
     bool HasKingMoved(bool isWhite) const;
     bool HasRookMoved(bool isWhite, bool isQueenside) const;
@@ -24,6 +18,13 @@ public:
     bool casteling;
     bool whiteCastle;
     bool blackCastle;
+
+    bool whiteQueenSideRookMoved;
+    bool whiteKingSideRookMoved;
+    bool blackQueenSideRookMoved;
+    bool blackKingSideRookMoved;
+    bool whiteKingMoved;
+    bool blackKingMoved;
 
     Piece board[8][8];
     bool IsInCheck(bool whiteKing) const;

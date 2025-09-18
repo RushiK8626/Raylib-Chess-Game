@@ -1,15 +1,14 @@
 #include "game.h"
-#include "board.h"
 
-Game::Game(int cellSize, int offset)
-    : board(cellSize, offset), winner("NA")
+Game::Game(HomeScreen::Mode mode)
+    : board(mode), winner("NA"), matchRunning(true)
 {
     myFont = LoadFontEx("font/firasans.ttf", 32, 0, 0);
-    Board board(cellSize, offset);
 }
 
 void Game::Run()
 {
+
     if (!board.gameOver)
     {
         board.Update();
@@ -46,8 +45,6 @@ void Game::DrawGameOverScreen()
     DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(), Fade(BLACK, 0.7f));
     if(winner != "NA")
     {
-        // int textWidth = MeasureText("CHECKMATE", 50);
-        // DrawText("CHECKMATE", (GetScreenWidth() - textWidth) / 2, GetScreenHeight() / 2 - 80, 50, RED);
         Vector2 textSize = MeasureTextEx(myFont, "CHECKMATE", 50, 2);
         Vector2 pos = {
             (GetScreenWidth() - textSize.x) / 2.0f, 
@@ -56,8 +53,6 @@ void Game::DrawGameOverScreen()
         DrawTextEx(myFont, "CHECKMATE", pos, 50, 2, RED);
 
         std::string winnerText = winner + " Wins!";
-        // int textWidth = MeasureText(winnerText.c_str(), 30);
-        // DrawText(winnerText.c_str(), (GetScreenWidth() - textWidth) / 2, GetScreenHeight() / 2 - 20, 30, WHITE);
         Vector2 winnerSize = MeasureTextEx(myFont, winnerText.c_str(), 30, 2);
         Vector2 winnerPos = {
             (GetScreenWidth() - winnerSize.x) / 2.0f,
@@ -68,8 +63,6 @@ void Game::DrawGameOverScreen()
     }
     else if (winner == "NA")
     {
-        // int textWidth = MeasureText("DRAW", 50);
-        // DrawText("DRAW", (GetScreenWidth() - textWidth) / 2, GetScreenHeight() / 2 - 80, 50, RED);
         Vector2 drawSize = MeasureTextEx(myFont, "DRAW", 50, 2);
         Vector2 drawPos = {
             (GetScreenWidth() - drawSize.x) / 2.0f,
@@ -77,34 +70,51 @@ void Game::DrawGameOverScreen()
         };
         DrawTextEx(myFont, "DRAW", drawPos, 50, 2, RED);
     }
-    Rectangle btnRect = {
+
+    Rectangle btnRectHome = {
+        (float)GetScreenWidth() / 2 - 60,
+        (float)GetScreenHeight() / 2 + 150,
+        120,
+        50};
+
+    DrawRectangleRounded(btnRectHome, 0.3f, 10, LIGHTGRAY);
+    DrawRectangleLinesEx(btnRectHome, 2, DARKGRAY);
+    Vector2 homeButtonSize = MeasureTextEx(myFont, "HOME", 25, 2);
+    Vector2 resetPos = {
+        btnRectHome.x + (btnRectHome.width - homeButtonSize.x) / 2.0f,
+        btnRectHome.y + 10.0f
+    };
+    DrawTextEx(myFont, "HOME", resetPos, 25, 2, BLACK);
+
+    Rectangle btnRectReset = {
         (float)GetScreenWidth() / 2 - 60,
         (float)GetScreenHeight() / 2 + 80,
         120,
         50};
 
-    DrawRectangleRounded(btnRect, 0.3f, 10, LIGHTGRAY);
-    DrawRectangleLinesEx(btnRect, 2, DARKGRAY);
-
-    // int textWidth = MeasureText("RESET", 25);
-    // DrawText("RESET", btnRect.x + (btnRect.width - textWidth) / 2, btnRect.y + 10, 25, BLACK);
+    DrawRectangleRounded(btnRectReset, 0.3f, 10, LIGHTGRAY);
+    DrawRectangleLinesEx(btnRectReset, 2, DARKGRAY);
     Vector2 resetSize = MeasureTextEx(myFont, "RESET", 25, 2);
-    Vector2 resetPos = {
-        btnRect.x + (btnRect.width - resetSize.x) / 2.0f,
-        btnRect.y + 10.0f
+    Vector2 homeButtonPos = {
+        btnRectReset.x + (btnRectReset.width - resetSize.x) / 2.0f,
+        btnRectReset.y + 10.0f
     };
-    DrawTextEx(myFont, "RESET", resetPos, 25, 2, BLACK);
+    DrawTextEx(myFont, "RESET", homeButtonPos, 25, 2, BLACK);
 
-    if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON) && CheckCollisionPointRec(GetMousePosition(), btnRect))
+    if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON) && CheckCollisionPointRec(GetMousePosition(), btnRectReset))
     {
         ResetGame();
+    }
+    else if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON) && CheckCollisionPointRec(GetMousePosition(), btnRectHome))
+    {
+        matchRunning = false;
     }
 }
 
 void Game::ResetGame()
 {
     // Reset board to initial state
-    board.isWhiteMov = false;
+    board.isWhiteMov = true;
     board.selectedPiece = nullptr;
     board.dragging = false;
     board.gameOver = false;

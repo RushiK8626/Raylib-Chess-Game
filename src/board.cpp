@@ -31,9 +31,25 @@ Board::Board(HomeScreen::Mode mode)
     InitializePieces();
     if(mode == HomeScreen::Mode::VS_ENGINE_BLACK || mode == HomeScreen::Mode::VS_ENGINE_WHITE) 
     {
-        engine = std::make_unique<Stockfish>("../stockfish/stockfish.exe"); //Use absolute or relative path to stockfish executable here
-        userColor = (mode == HomeScreen::Mode::VS_ENGINE_WHITE) ? true : false;
-        startEngine();
+        try 
+        {
+            engine = std::make_unique<Stockfish>("stockfish\\stockfish.exe");
+            userColor = (mode == HomeScreen::Mode::VS_ENGINE_WHITE) ? true : false;
+            startEngine();
+            if (!isEngineRunning) 
+            {
+                engine.reset();
+                engineFailed = true;
+                return;
+            }
+        }
+        catch (const std::exception& e) 
+        {
+            std::cerr << "Failed to load Stockfish: " << e.what() << std::endl;
+            engine.reset();
+            engineFailed = true;
+            return;
+        }
     }
     fen = fenGenerator::generateFEN(*this);
     positionHistory[fen]++;
@@ -247,6 +263,7 @@ void Board::handleMove()
 {
     if((mode == HomeScreen::Mode::VS_ENGINE_WHITE && !isWhiteMov)|| (mode == HomeScreen::Mode::VS_ENGINE_BLACK && isWhiteMov))
     {
+        if (!engine || engineFailed) return;
         std::string uciMove = getStockfishMove();
         makeEngineMove(uciMove);
     }

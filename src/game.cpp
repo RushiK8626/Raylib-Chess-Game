@@ -1,13 +1,18 @@
 #include "game.h"
 
 Game::Game(HomeScreen::Mode mode)
-    : board(mode), winner("NA"), matchRunning(true)
+    : winner("NA"), matchRunning(true), board(mode)
 {
     myFont = LoadFontEx("font/firasans.ttf", 32, 0, 0);
 }
 
 void Game::Run()
 {
+    if (board.engineFailed) {
+        TraceLog(LOG_WARNING, "Stockfish engine failed to load. Returning to home screen.");
+        matchRunning = false;
+        return;
+    }
 
     if (!board.gameOver)
     {

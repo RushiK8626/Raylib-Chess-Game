@@ -79,49 +79,8 @@ bool HomeScreen::hover(const Rectangle& r) const {
 	return CheckCollisionPointRec(GetMousePosition(), r);
 }
 
-// void HomeScreen::Update() {
-// 	if (startGame || quit) return; // nothing else
-
-// 	if (!confirmScreen) {
-// 		if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON)) {
-// 			Vector2 mp = GetMousePosition();
-// 			if (CheckCollisionPointRec(mp, btnEngineWhite)) { 
-// 				selectedMode = VS_ENGINE_WHITE; 
-// 				confirmScreen = true; 
-// 			}
-// 			else if (CheckCollisionPointRec(mp, btnEngineBlack)) { 
-// 				selectedMode = VS_ENGINE_BLACK; 
-// 				confirmScreen = true; 
-// 			}
-// 			else if (CheckCollisionPointRec(mp, btnHuman)) { 
-// 				selectedMode = HUMAN_VS_HUMAN; 
-// 				confirmScreen = true; 
-// 			}
-// 			else if (CheckCollisionPointRec(mp, btnQuit)) { 
-// 				quit = true; 
-// 			}
-// 		}
-// 	} else { // confirm screen
-// 		if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON)) {
-// 			Vector2 mp = GetMousePosition();
-// 			if (CheckCollisionPointRec(mp, btnStart)) {
-// 				// Create game instance with selected mode (only once)
-// 				if(!game) game = std::make_unique<Game>(cellSize, offset, selectedMode);
-// 				startGame = true;
-// 			} else if (CheckCollisionPointRec(mp, btnBack)) {
-// 				selectedMode = NONE;
-// 				confirmScreen = false;
-// 			}
-// 		}
-// 		if (IsKeyPressed(KEY_ESCAPE)) {
-// 			selectedMode = NONE;
-// 			confirmScreen = false;
-// 		}
-// 	}
-// }
-
 void HomeScreen::Update() {
-    if (startGame || quit) return; // nothing else
+    if (startGame || quit) return; 
 
     if (!confirmScreen) {
         if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON)) {
@@ -146,7 +105,7 @@ void HomeScreen::Update() {
         if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON)) {
             Vector2 mp = GetMousePosition();
             if (CheckCollisionPointRec(mp, btnStart)) {
-                // Always create a new game instance
+                // create a new game instance
                 game = std::make_unique<Game>(selectedMode);
                 startGame = true;
             } else if (CheckCollisionPointRec(mp, btnBack)) {

@@ -30,7 +30,20 @@ Stockfish::Stockfish(const std::string& path) {
     MultiByteToWideChar(CP_UTF8, 0, path.c_str(), -1, &wpath[0], wlen);
 
     // Launch Stockfish
-    if (!CreateProcessW(wpath.c_str(), nullptr, nullptr, nullptr, TRUE, 0, nullptr, nullptr, &si, &pi)) {
+    BOOL success = CreateProcessW(
+        NULL,
+        const_cast<wchar_t*>(wpath.c_str()),
+        NULL, NULL, TRUE, CREATE_NO_WINDOW,
+        NULL, NULL, &si, &pi
+    );
+
+    if (!success) {
+        // Clean up any pipe handles that were created
+        if (hChildStdinWr) { CloseHandle(hChildStdinWr); hChildStdinWr = NULL; }
+        if (hChildStdoutRd) { CloseHandle(hChildStdoutRd); hChildStdoutRd = NULL; }
+        CloseHandle(hChildStdinRd);
+        CloseHandle(hChildStdoutWr);
+        ZeroMemory(&pi, sizeof(pi));
         throw std::runtime_error("Failed to start Stockfish");
     }
 
@@ -40,18 +53,28 @@ Stockfish::Stockfish(const std::string& path) {
 }
 
 Stockfish::~Stockfish() {
-    CloseHandle(hChildStdinWr);
-    CloseHandle(hChildStdoutRd);
-    CloseHandle(pi.hProcess);
-    CloseHandle(pi.hThread);
+    if (hChildStdinWr && hChildStdinWr != INVALID_HANDLE_VALUE) CloseHandle(hChildStdinWr);
+    if (hChildStdoutRd && hChildStdoutRd != INVALID_HANDLE_VALUE) CloseHandle(hChildStdoutRd);
+    if (pi.hProcess && pi.hProcess != INVALID_HANDLE_VALUE) CloseHandle(pi.hProcess);
+    if (pi.hThread && pi.hThread != INVALID_HANDLE_VALUE) CloseHandle(pi.hThread);
 }
 
 void Stockfish::sendCommand(const std::string& cmd) {
+    if (hChildStdinWr == NULL || hChildStdinWr == INVALID_HANDLE_VALUE) {
+        throw std::runtime_error("Stockfish pipe is not valid");
+    }
+    std::string cmdWithNewline = cmd + "\n";
     DWORD written;
-    WriteFile(hChildStdinWr, cmd.c_str(), cmd.size(), &written, nullptr);
+    if (!WriteFile(hChildStdinWr, cmdWithNewline.c_str(), cmdWithNewline.size(), &written, nullptr)) {
+        throw std::runtime_error("Failed to write to Stockfish pipe");
+    }
 }
 
 std::string Stockfish::readResponse() {
+    if (hChildStdoutRd == NULL || hChildStdoutRd == INVALID_HANDLE_VALUE) {
+        throw std::runtime_error("Stockfish pipe is not valid");
+    }
+
     char buffer[4096];
     DWORD read;
     std::string result;

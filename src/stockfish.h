@@ -19,8 +19,8 @@
 
 class Stockfish {
 private:
-    HANDLE hChildStdinWr;
-    HANDLE hChildStdoutRd;
+    HANDLE hChildStdinWr = NULL;
+    HANDLE hChildStdoutRd = NULL;
     PROCESS_INFORMATION pi;
 
 public:

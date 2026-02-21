@@ -94,6 +94,7 @@ public:
     ~Board();
 
     bool gameOver;
+    bool engineFailed = false;
     bool victory = false;
     bool draw = false;
     bool isWhiteMov;

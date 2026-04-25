@@ -15,7 +15,7 @@ bool IsStalemate(const Board &board, bool whiteToMove)
             
             for (int toRow = 0; toRow < 8; ++toRow) {
                 for (int toCol = 0; toCol < 8; ++toCol) {
-                    simpleBoard tempBoard = static_cast<const simpleBoard&>(board);
+                    GameStateManager tempBoard = static_cast<const GameStateManager&>(board);
                     Piece& tempPiece = tempBoard.board[fromRow][fromCol];
                     if (tempPiece.IsValidMove(fromCol, fromRow, toCol, toRow, tempBoard)) {
                         // Simulate the move
@@ -33,7 +33,6 @@ bool IsStalemate(const Board &board, bool whiteToMove)
     }
     return true;
 }
-
 
 // Main checkmate check
 bool IsCheckmate(const Board &board, bool whiteKing) 
@@ -62,7 +61,7 @@ bool IsCheckmate(const Board &board, bool whiteKing)
                     continue;
 
                 // Create a non-const copy for move simulation
-                simpleBoard tempBoard = static_cast<const simpleBoard&>(board);
+                GameStateManager tempBoard = static_cast<const GameStateManager&>(board);
                 Piece& tempKing = tempBoard.board[kingRow][kingCol];
                 
                 // Move king on temporary board
@@ -90,7 +89,7 @@ bool IsCheckmate(const Board &board, bool whiteKing)
             for (int toRow = 0; toRow < 8; ++toRow) {
                 for (int toCol = 0; toCol < 8; ++toCol) {
                     // Create a non-const copy for move simulation
-                    simpleBoard tempBoard = static_cast<const simpleBoard&>(board);
+                    GameStateManager tempBoard = static_cast<const GameStateManager&>(board);
                     Piece& tempPiece = tempBoard.board[fromRow][fromCol];
                     
                     if (tempPiece.IsValidMove(fromCol, fromRow, toCol, toRow, tempBoard)) {

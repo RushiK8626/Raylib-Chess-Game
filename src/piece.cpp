@@ -1,5 +1,5 @@
 #include "piece.h"
-#include "simpleBoard.h"
+#include "gameStateManager.h"
 #include "board.h"
 #include "constants.h"
 #include <cmath>
@@ -22,7 +22,7 @@ void Piece::Draw()
     DrawTexturePro(texture, sourceRec, destRec, origin, 0.0f, WHITE);
 }
 
-bool Piece::IsValidMove(int startX, int startY, int endX, int endY, const simpleBoard& board) const
+bool Piece::IsValidMove(int startX, int startY, int endX, int endY, const GameStateManager& board) const
 {
     Piece dest = board.GetPiece(endY, endX);
     Piece start = board.GetPiece(startY, startX);
@@ -52,7 +52,7 @@ bool Piece::IsValidMove(int startX, int startY, int endX, int endY, const simple
     }
 }
 
-bool Piece::IsValidPawnMove(int startX, int startY, int endX, int endY, int id, int destId, const simpleBoard& board) const
+bool Piece::IsValidPawnMove(int startX, int startY, int endX, int endY, int id, int destId, const GameStateManager& board) const
 {
     int direction = (id > 0) ? 1 : -1; // White pawns move up, black pawns move down
     // Normal forward move
@@ -77,7 +77,7 @@ bool Piece::IsValidPawnMove(int startX, int startY, int endX, int endY, int id, 
     }
 
     // en Passant capture check
-    Board* fullBoard = dynamic_cast<Board*>(const_cast<simpleBoard*>(&board));
+    Board* fullBoard = dynamic_cast<Board*>(const_cast<GameStateManager*>(&board));
     if (fullBoard && std::abs(startX - endX) == 1 && endY == startY + direction && destId == 0) {
         if (fullBoard->enPassantCol == endX && fullBoard->enPassantRow == endY) {
             fullBoard->enPassantCapture = true;
@@ -87,32 +87,32 @@ bool Piece::IsValidPawnMove(int startX, int startY, int endX, int endY, int id, 
     return false;
 }
 
-bool Piece::IsValidRookMove(int startX, int startY, int endX, int endY, int id, int destId, const simpleBoard& board) const
+bool Piece::IsValidRookMove(int startX, int startY, int endX, int endY, int id, int destId, const GameStateManager& board) const
 {
     if (startX != endX && startY != endY) return false;
     return IsPathClear(startX, startY, endX, endY, board);
 }
 
-bool Piece::IsValidKnightMove(int startX, int startY, int endX, int endY, int id, int destId, const simpleBoard& board) const
+bool Piece::IsValidKnightMove(int startX, int startY, int endX, int endY, int id, int destId, const GameStateManager& board) const
 {
     int dx = std::abs(startX - endX);
     int dy = std::abs(startY - endY);
     return (dx == 2 && dy == 1) || (dx == 1 && dy == 2);
 }
 
-bool Piece::IsValidBishopMove(int startX, int startY, int endX, int endY, int id, int destId, const simpleBoard& board) const
+bool Piece::IsValidBishopMove(int startX, int startY, int endX, int endY, int id, int destId, const GameStateManager& board) const
 {
     if (std::abs(startX - endX) != std::abs(startY - endY)) return false;
     return IsPathClear(startX, startY, endX, endY, board);
 }
 
-bool Piece::IsValidQueenMove(int startX, int startY, int endX, int endY, int id, int destId, const simpleBoard& board) const
+bool Piece::IsValidQueenMove(int startX, int startY, int endX, int endY, int id, int destId, const GameStateManager& board) const
 {
     return IsValidRookMove(startX, startY, endX, endY, id, destId, board) || 
         IsValidBishopMove(startX, startY, endX, endY, id, destId, board);
 } 
 
-bool Piece::IsValidKingMove(int startX, int startY, int endX, int endY, int id, int destId, const simpleBoard& board) const
+bool Piece::IsValidKingMove(int startX, int startY, int endX, int endY, int id, int destId, const GameStateManager& board) const
 {
     int dx = std::abs(startX - endX);
     int dy = std::abs(startY - endY);
@@ -161,7 +161,7 @@ bool Piece::IsValidKingMove(int startX, int startY, int endX, int endY, int id, 
     return false;
 }
 
-bool Piece::IsPathClear(int startX, int startY, int endX, int endY, const simpleBoard& board) const
+bool Piece::IsPathClear(int startX, int startY, int endX, int endY, const GameStateManager& board) const
 {
     int dx = (endX > startX) ? 1 : (endX < startX) ? -1 : 0;
     int dy = (endY > startY) ? 1 : (endY < startY) ? -1 : 0;

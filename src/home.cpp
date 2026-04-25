@@ -148,7 +148,6 @@ static void DrawGradientButton(const Rectangle& r, const std::string& text, cons
 	DrawTextEx(font, text.c_str(), pos, 24, 2, WHITE);
 }
 
-
 void HomeScreen::Draw() const {
 	// Animated background gradient
 	float gradientWINDOW_HEIGHTift = sinf(animationTimer * 0.5f) * 20.0f;

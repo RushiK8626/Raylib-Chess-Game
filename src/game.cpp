@@ -1,47 +1,48 @@
 #include "game.h"
 
 Game::Game(HomeScreen::Mode mode)
-    : winner("NA"), matchRunning(true), board(mode)
+    : winner("NA"), matchRunning(true), gameMode(mode), board(std::make_unique<Board>(mode))
 {
     myFont = LoadFontEx("font/firasans.ttf", 32, 0, 0);
 }
 
 void Game::Run()
 {
-    if (board.engineFailed) {
+    if (board->engineFailed) {
         TraceLog(LOG_WARNING, "Stockfish engine failed to load. Returning to home screen.");
         matchRunning = false;
         return;
     }
 
-    if (!board.gameOver)
+    if (!board->gameOver)
     {
-        board.Update();
+        board->Update();
     }
-    board.Draw();
-    if (board.gameOver)
+
+    board->Draw();
+
+    if (board->gameOver)
     {
         HandleGameOver();
     }
 }
 
-
 void Game::HandleGameOver()
 {
-    if (board.victory)
+    if (board->victory)
     {
-        winner = board.isWhiteMov ? "Black" : "White";
+        winner = board->isWhiteMov ? "Black" : "White";
         // Disable further moves
-        board.gameOver = true;
-        board.victory = true;
+        board->gameOver = true;
+        board->victory = true;
         DrawGameOverScreen();
     }
-    else if(board.draw)
+    else if(board->draw)
     {
         winner = "NA";
         DrawGameOverScreen();
     }
-    else board.gameOver = false;
+    else board->gameOver = false;
 }
 
 void Game::DrawGameOverScreen()
@@ -118,23 +119,7 @@ void Game::DrawGameOverScreen()
 
 void Game::ResetGame()
 {
-    // Reset board to initial state
-    board.isWhiteMov = true;
-    board.selectedPiece = nullptr;
-    board.dragging = false;
-    board.gameOver = false;
-    for (int row = 0; row < 8; ++row)
-    {
-        for (int col = 0; col < 8; ++col)
-        {
-            board.board[row][col] = Piece();
-        }
-    }
-    board.InitializePieces();
-    // Clear move history
-    while (!board.moveHistory.empty())
-    {
-        board.moveHistory.pop_back();
-    }
-    board.gameOver = false;
+    // Delete previous board and create a fresh one with same mode
+    board = std::make_unique<Board>(gameMode);
+    winner = "NA";
 }

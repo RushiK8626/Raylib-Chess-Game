@@ -1,35 +1,12 @@
-#**************************************************************************************************
-#
-#   raylib makefile for Desktop platforms, Raspberry Pi, Android and HTML5
-#
-#   Copyright (c) 2013-2019 Ramon Santamaria (@raysan5)
-#
-#   This software is provided "as-is", without any express or implied warranty. In no event
-#   will the authors be held liable for any damages arising from the use of this software.
-#
-#   Permission is granted to anyone to use this software for any purpose, including commercial
-#   applications, and to alter it and redistribute it freely, subject to the following restrictions:
-#
-#     1. The origin of this software must not be misrepresented; you must not claim that you
-#     wrote the original software. If you use this software in a product, an acknowledgment
-#     in the product documentation would be appreciated but is not required.
-#
-#     2. Altered source versions must be plainly marked as such, and must not be misrepresented
-#     as being the original software.
-#
-#     3. This notice may not be removed or altered from any source distribution.
-#
-#**************************************************************************************************
-
 .PHONY: all clean
 
 # Define required raylib variables
 PROJECT_NAME       ?= game
-RAYLIB_VERSION     ?= 5.0.0
+RAYLIB_VERSION     ?= 6.0.0
 RAYLIB_PATH        ?= ..\..
 
 # Define compiler path on Windows
-COMPILER_PATH      ?= C:/raylib/w64devkit/bin
+COMPILER_PATH        ?= C:/mingw64/gcc11/bin
 
 # Define default options
 # One of PLATFORM_DESKTOP, PLATFORM_RPI, PLATFORM_ANDROID, PLATFORM_WEB
@@ -69,7 +46,8 @@ ifeq ($(PLATFORM),PLATFORM_DESKTOP)
     # ifeq ($(UNAME),Msys) -> Windows
     ifeq ($(OS),Windows_NT)
         PLATFORM_OS=WINDOWS
-        export PATH := $(COMPILER_PATH):$(PATH)
+        # On Windows, use ';' as PATH separator to avoid malformed PATH entries.
+        export PATH := $(COMPILER_PATH);$(PATH)
     else
         UNAMEOS=$(shell uname)
         ifeq ($(UNAMEOS),Linux)
@@ -131,17 +109,6 @@ endif
 RAYLIB_RELEASE_PATH 	?= $(RAYLIB_PATH)/src
 
 # EXAMPLE_RUNTIME_PATH embeds a custom runtime location of libraylib.so or other desired libraries
-# into each example binary compiled with RAYLIB_LIBTYPE=SHARED. It defaults to RAYLIB_RELEASE_PATH
-# so that these examples link at runtime with your version of libraylib.so in ../release/libs/linux
-# without formal installation from ../src/Makefile. It aids portability and is useful if you have
-# multiple versions of raylib, have raylib installed to a non-standard location, or want to
-# bundle libraylib.so with your game. Change it to your liking.
-# NOTE: If, at runtime, there is a libraylib.so at both EXAMPLE_RUNTIME_PATH and RAYLIB_INSTALL_PATH,
-# The library at EXAMPLE_RUNTIME_PATH, if present, will take precedence over RAYLIB_INSTALL_PATH,
-# Implemented for LINUX below with CFLAGS += -Wl,-rpath,$(EXAMPLE_RUNTIME_PATH)
-# To see the result, run readelf -d core/core_basic_window; looking at the RPATH or RUNPATH attribute.
-# To see which libraries a built example is linking to, ldd core/core_basic_window;
-# Look for libraylib.so.1 => $(RAYLIB_INSTALL_PATH)/libraylib.so.1 or similar listing.
 EXAMPLE_RUNTIME_PATH   ?= $(RAYLIB_RELEASE_PATH)
 
 # Define default C compiler: gcc
@@ -194,7 +161,7 @@ endif
 #  -std=gnu99           defines C language mode (GNU C from 1999 revision)
 #  -Wno-missing-braces  ignore invalid warning (GCC bug 53119)
 #  -D_DEFAULT_SOURCE    use with -std=c99 on Linux and PLATFORM_WEB, required for timespec
-CFLAGS += -Wall -std=c++14 -D_DEFAULT_SOURCE -Wno-missing-braces
+CFLAGS += -Wall -std=c++17 -D_DEFAULT_SOURCE -Wno-missing-braces
 
 ifeq ($(BUILD_MODE),DEBUG)
     CFLAGS += -g -O0
@@ -209,6 +176,8 @@ ifeq ($(PLATFORM),PLATFORM_DESKTOP)
         # resource file contains windows executable icon and properties
         # -Wl,--subsystem,windows hides the console window
         CFLAGS += $(RAYLIB_PATH)/src/raylib.rc.data
+        # Force GCC to use binutils from the same toolchain directory.
+        CFLAGS += -B$(COMPILER_PATH)
     endif
     ifeq ($(PLATFORM_OS),LINUX)
         ifeq ($(RAYLIB_LIBTYPE),STATIC)

@@ -7,6 +7,6 @@ A simple chess game built with [Raylib](https://www.raylib.com/) in C++, featuri
 - FEN generation and algebraic notation parsing
 - Sound effects and custom fonts
 ## Requirements
-- [Raylib 5.0](https://github.com/raysan5/raylib/releases/tag/5.0)
+- [Raylib 5+](https://github.com/raysan5/raylib/releases/tag/5.0)
 - [Stockfish](https://stockfishchess.org/download/) (for AI mode) – create folder named stockfish in root directory and place stockfish.exe in it
-- C++14 compiler (g++ / clang++)
+- C++14 or higher compiler (g++ / clang++)

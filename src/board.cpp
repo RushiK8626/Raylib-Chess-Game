@@ -3,6 +3,8 @@
 #include <stack>
 #include <string>
 #include <filesystem>
+#include <thread>
+#include <chrono>
 #include "board.h"
 #include "piece.h"
 #include "endgame.h"
@@ -20,6 +22,7 @@ Board::Board(HomeScreen::Mode mode)
     selectedPiece = nullptr;
     dragging = false;
     gameOver = false;
+    engineFirstMove = mode == HomeScreen::Mode::VS_ENGINE_BLACK;
 
     for (int row = 0; row < 8; ++row)
     {
@@ -30,35 +33,35 @@ Board::Board(HomeScreen::Mode mode)
     }
     LoadTextures();
     InitializePieces();
-    if(mode == HomeScreen::Mode::VS_ENGINE_BLACK || mode == HomeScreen::Mode::VS_ENGINE_WHITE) 
+    if (mode == HomeScreen::Mode::VS_ENGINE_BLACK || mode == HomeScreen::Mode::VS_ENGINE_WHITE)
     {
-        try 
+        try
         {
             // Try multiple locations for stockfish
             char exePath[MAX_PATH];
             GetModuleFileNameA(NULL, exePath, MAX_PATH);
             std::filesystem::path exeDir = std::filesystem::path(exePath).parent_path();
             std::filesystem::path cwd = std::filesystem::current_path();
-            
+
             std::vector<std::filesystem::path> candidates = {
                 exeDir / "stockfish" / "stockfish.exe",
                 cwd / "stockfish" / "stockfish.exe",
             };
-            
+
             std::string sfPath;
-            for (const auto& candidate : candidates) 
+            for (const auto &candidate : candidates)
             {
-                if (std::filesystem::exists(candidate)) 
+                if (std::filesystem::exists(candidate))
                 {
                     sfPath = candidate.string();
                     break;
                 }
             }
-            
-            if (sfPath.empty()) 
+
+            if (sfPath.empty())
             {
                 std::cerr << "Stockfish not found. Checked:" << std::endl;
-                for (const auto& candidate : candidates) 
+                for (const auto &candidate : candidates)
                 {
                     std::cerr << "  - " << candidate.string() << std::endl;
                 }
@@ -66,19 +69,19 @@ Board::Board(HomeScreen::Mode mode)
                 engineFailed = true;
                 return;
             }
-            
+
             engine = std::make_unique<Stockfish>(sfPath);
 
             userColor = (mode == HomeScreen::Mode::VS_ENGINE_WHITE) ? true : false;
             startEngine();
-            if (!isEngineRunning) 
+            if (!isEngineRunning)
             {
                 engine.reset();
                 engineFailed = true;
                 return;
             }
         }
-        catch (const std::exception& e) 
+        catch (const std::exception &e)
         {
             std::cerr << "Failed to load Stockfish: " << e.what() << std::endl;
             engine.reset();
@@ -88,6 +91,7 @@ Board::Board(HomeScreen::Mode mode)
     }
     fen = fenGenerator::generateFEN(*this);
     positionHistory[fen]++;
+
 }
 
 Board::~Board()
@@ -108,8 +112,10 @@ Board::~Board()
     UnloadTexture(blackKing);
 
     // Unload sounds
-    if(moved.frameCount > 0) UnloadSound(moved);
-    if(capture.frameCount > 0) UnloadSound(capture);
+    if (moved.frameCount > 0)
+        UnloadSound(moved);
+    if (capture.frameCount > 0)
+        UnloadSound(capture);
 }
 
 void Board::LoadTextures()
@@ -189,28 +195,31 @@ void Board::Draw()
 
 void Board::DrawPieces()
 {
+    bool flipped = (mode == HomeScreen::Mode::VS_ENGINE_BLACK);
+
     for (int row = 0; row < 8; ++row)
     {
         for (int col = 0; col < 8; ++col)
         {
+            int drawRow = flipped ? (7 - row) : row;
+            int drawCol = flipped ? (7 - col) : col;
+
             if (board[row][col].id != 0 && &board[row][col] != selectedPiece)
             {
-                board[row][col].Draw();
+                board[row][col].Draw(drawRow, drawCol);
             }
         }
     }
 
-    // If piece is selected for move adjust its position according mouse position
     if (dragging && selectedPiece != nullptr)
     {
-        Rectangle sourceRec = { 0, 0, (float)selectedPiece->getTexture().width, (float)selectedPiece->getTexture().height };
+        Rectangle sourceRec = {0, 0, (float)selectedPiece->getTexture().width, (float)selectedPiece->getTexture().height};
         Rectangle destRec = {
-            static_cast<float>(mousePos.x - CELL_SIZE / 2), 
-            static_cast<float>(mousePos.y - CELL_SIZE / 2), 
-            static_cast<float>(CELL_SIZE - 20), 
-            static_cast<float>(CELL_SIZE - 20) 
-        };
-        Vector2 origin = { 0, 0 };
+            static_cast<float>(mousePos.x - CELL_SIZE / 2),
+            static_cast<float>(mousePos.y - CELL_SIZE / 2),
+            static_cast<float>(CELL_SIZE - 20),
+            static_cast<float>(CELL_SIZE - 20)};
+        Vector2 origin = {0, 0};
 
         DrawTexturePro(selectedPiece->getTexture(), sourceRec, destRec, origin, 0.0f, WHITE);
     }
@@ -219,18 +228,30 @@ void Board::DrawPieces()
 void Board::handleMove()
 {
     // ENGINE MODE: Let the engine make moves
-    if((mode == HomeScreen::Mode::VS_ENGINE_WHITE && !isWhiteMov)|| (mode == HomeScreen::Mode::VS_ENGINE_BLACK && isWhiteMov))
+    if ((mode == HomeScreen::Mode::VS_ENGINE_WHITE && !isWhiteMov) || (mode == HomeScreen::Mode::VS_ENGINE_BLACK && isWhiteMov))
     {
-        if (!engine || engineFailed) return;
+        if(engineFirstMove)
+        {
+            std::this_thread::sleep_for(std::chrono::milliseconds(500)); 
+            engineFirstMove = false;
+        }
+        if (!engine || engineFailed)
+            return;
         std::string uciMove = getStockfishMove();
         makeEngineMove(uciMove);
         return;
     }
-    
+
     // HUMAN MODE: Handle mouse input
     mousePos = GetMousePosition();
     int mouseX = (mousePos.x - OFFSET) / CELL_SIZE;
     int mouseY = (mousePos.y - OFFSET) / CELL_SIZE;
+
+    if(mode == HomeScreen::Mode::VS_ENGINE_BLACK)
+    {
+        mouseX = 7 - mouseX;
+        mouseY = 7 - mouseY;   
+    }
 
     // Check if mouse is within board bounds
     if (mouseX >= 0 && mouseX < 8 && mouseY >= 0 && mouseY < 8)
@@ -265,7 +286,7 @@ void Board::handleMove()
 
                     // Call GameStateManager::ExecuteMove with correct parameters
                     GameStateManager::ExecuteMove(movedPiece, originalCol, originalRow, mouseX, mouseY);
-                    
+
                     // Handle UI consequences (sounds, etc)
                     afterMoveHandle(mouseX, mouseY, capturedPieceId);
                 }
@@ -304,8 +325,8 @@ void Board::afterMoveHandle(int endX, int endY, int capturedPieceId)
     fen = fenGenerator::generateFEN(*this);
     positionHistory[fen]++;
 
-    bool isCurrentCheckmate = IsCheckmate(static_cast<const Board&>(*this), isWhiteMov);
-    bool isCurrentStalemate = IsStalemate(static_cast<const Board&>(*this), isWhiteMov);
+    bool isCurrentCheckmate = IsCheckmate(static_cast<const Board &>(*this), isWhiteMov);
+    bool isCurrentStalemate = IsStalemate(static_cast<const Board &>(*this), isWhiteMov);
     // Handle checkmate
     if (isCurrentCheckmate)
     {
@@ -314,14 +335,14 @@ void Board::afterMoveHandle(int endX, int endY, int capturedPieceId)
         victory = true;
         return;
     }
-    else if (isCurrentStalemate) 
+    else if (isCurrentStalemate)
     {
         PlaySound(gameend);
         gameOver = true;
         draw = true;
         return;
     }
-    
+
     playMoveSound(endX, endY, capturedPieceId != 0);
 
     dragging = false;
@@ -332,8 +353,10 @@ void Board::afterMoveHandle(int endX, int endY, int capturedPieceId)
 
 void Board::playMoveSound(int endX, int endY, bool isCapture)
 {
-    if (isCapture) PlaySound(capture);
-    else PlaySound(moved);
+    if (isCapture)
+        PlaySound(capture);
+    else
+        PlaySound(moved);
 }
 
 void Board::startEngine()
@@ -368,41 +391,50 @@ std::string Board::getStockfishMove()
         std::string bestMove = resp;
         const std::string prefix = "bestmove ";
         auto pos = resp.find(prefix);
-        if (pos != std::string::npos) {
+        if (pos != std::string::npos)
+        {
             auto end = resp.find_first_of(" \n\r\t", pos + prefix.size());
-            if (end != std::string::npos) bestMove = resp.substr(pos + prefix.size(), end - (pos + prefix.size()));
-            else bestMove = resp.substr(pos + prefix.size());
+            if (end != std::string::npos)
+                bestMove = resp.substr(pos + prefix.size(), end - (pos + prefix.size()));
+            else
+                bestMove = resp.substr(pos + prefix.size());
         }
         return bestMove;
     }
-    catch(const std::exception& e)
+    catch (const std::exception &e)
     {
         std::cerr << e.what() << '\n';
         return "";
     }
 }
 
-bool Board::uciToCoords(const std::string& move, int &startX, int &startY, int &endX, int &endY) {
-    if (move.size() < 4) return false;
+bool Board::uciToCoords(const std::string &move, int &startX, int &startY, int &endX, int &endY)
+{
+    if (move.size() < 4)
+        return false;
 
-    startX = move[0] - 'a';           // 'a'->0, 'b'->1
-    startY = 8 - (move[1] - '0');    // '1'->7, '2'->6
+    startX = move[0] - 'a';       // 'a'->0, 'b'->1
+    startY = 8 - (move[1] - '0'); // '1'->7, '2'->6
     endX = move[2] - 'a';
     endY = 8 - (move[3] - '0');
 
     return true;
 }
 
-void Board::makeEngineMove(const std::string& uciMove) {
+void Board::makeEngineMove(const std::string &uciMove)
+{
     int startX, startY, endX, endY;
-    if(!uciToCoords(uciMove, startX, startY, endX, endY)) return;
+    if (!uciToCoords(uciMove, startX, startY, endX, endY))
+        return;
 
     // Work on a copy to avoid aliasing the board cell that we clear inside ExecuteMove
     Piece movedPiece = board[startY][startX];
-    if (movedPiece.id == 0) return; // No piece abort
+    if (movedPiece.id == 0)
+        return; // No piece abort
 
     // Safety: ensure engine moves the correct color for the current turn
-    if ((isWhiteMov && movedPiece.id >= 0) || (!isWhiteMov && movedPiece.id <= 0)) {
+    if ((isWhiteMov && movedPiece.id >= 0) || (!isWhiteMov && movedPiece.id <= 0))
+    {
         // The UCI move doesn't match side to move; ignore
         return;
     }

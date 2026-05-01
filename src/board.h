@@ -20,6 +20,7 @@ class Board : public GameStateManager {
     int originalRow, originalCol;
     bool isEngineRunning = false;
     bool userColor = true;
+    bool engineFirstMove;
 
     std::string getStockfishMove();
     Texture2D whitePawn, whiteRook, whiteKnight, whiteBishop, whiteQueen, whiteKing;

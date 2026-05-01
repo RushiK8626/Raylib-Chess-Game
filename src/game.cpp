@@ -1,27 +1,49 @@
 #include "game.h"
+#include "buttons.h"
 
 Game::Game(HomeScreen::Mode mode)
-    : winner("NA"), matchRunning(true), gameMode(mode), board(std::make_unique<Board>(mode))
+    : paused(false), winner("NA"), board(std::make_unique<Board>(mode)), gameMode(mode), matchRunning(true)
 {
-    myFont = LoadFontEx("font/firasans.ttf", 32, 0, 0);
+    myFont = LoadFontEx("font/Lora-Italic.ttf", 32, 0, 0);
+    fontBold = LoadFontEx("font/Lora-BoldItalic.ttf", 32, 0, 0);
+    titleFont = LoadFontEx("font/LuckiestGuy.ttf", 90, 0, 0);
+
+    if (myFont.texture.id == 0)
+    {
+        myFont = GetFontDefault();
+    }
+    if (fontBold.texture.id == 0)
+    {
+        fontBold = GetFontDefault();
+    }
+    if (titleFont.texture.id == 0)
+    {
+        titleFont = GetFontDefault();
+    }
 }
 
 void Game::Run()
 {
-    if (board->engineFailed) {
+    if (board->engineFailed)
+    {
         TraceLog(LOG_WARNING, "Stockfish engine failed to load. Returning to home screen.");
         matchRunning = false;
         return;
     }
 
-    if (!board->gameOver)
+    if (IsKeyPressed(KEY_ESCAPE))
+    {
+        paused = !paused;
+    }
+
+    if (!paused && !board->gameOver)
     {
         board->Update();
     }
 
     board->Draw();
 
-    if (board->gameOver)
+    if (board->gameOver || paused)
     {
         HandleGameOver();
     }
@@ -37,83 +59,137 @@ void Game::HandleGameOver()
         board->victory = true;
         DrawGameOverScreen();
     }
-    else if(board->draw)
+    else if (board->draw)
     {
         winner = "NA";
         DrawGameOverScreen();
     }
-    else board->gameOver = false;
+    else if (paused)
+    {
+        DrawGameOverScreen();
+    }
+    else
+        board->gameOver = false;
 }
 
 void Game::DrawGameOverScreen()
 {
-    // Draw an opaque background
-    DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(), Fade(BLACK, 0.7f));
-    if(winner != "NA")
+    DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(), Fade(BLACK, 0.75f));
+
+    float centerX = GetScreenWidth() / 2.0f - 60;
+
+    Rectangle btnHome = {centerX, (float)GetScreenHeight() / 2 - 100, 120, 50};
+    Rectangle btnReset = {centerX, (float)GetScreenHeight() / 2 - 30, 120, 50};
+    Rectangle btnContinue = {centerX, (float)GetScreenHeight() / 2 + 40, 120, 50};
+
+    if (paused)
     {
-        Vector2 textSize = MeasureTextEx(myFont, "CHECKMATE", 50, 2);
+        // HOME button - cool blue (clean, neutral action)
+        DrawGradientButton(btnHome, "HOME", myFont, fontBold,
+                           Color{70, 130, 200, 220}, // base
+                           Color{120, 180, 255, 255} // hover
+        );
+
+        // RESET button - warm red (destructive action)
+        DrawGradientButton(btnReset, "RESET", myFont, fontBold,
+                           Color{180, 70, 70, 220},
+                           Color{255, 100, 100, 255});
+
+        // CONTINUE button - vibrant green (positive action)
+        DrawGradientButton(btnContinue, "CONTINUE", myFont, fontBold,
+                           Color{60, 150, 90, 220},
+                           Color{100, 220, 140, 255});
+
+        if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON))
+        {
+            Vector2 mouse = GetMousePosition();
+
+            if (CheckCollisionPointRec(mouse, btnReset))
+            {
+                ResetGame();
+                paused = false;
+            }
+            else if (CheckCollisionPointRec(mouse, btnHome))
+            {
+                matchRunning = false;
+            }
+            else if (CheckCollisionPointRec(mouse, btnContinue))
+            {
+                paused = false;
+            }
+        }
+    }
+    else
+    {
+        std::string mainText = (winner != "NA") ? "CHECKMATE" : "DRAW";
+
+        float fontSize = 72;
+        float spacing = 5;
+
+        Vector2 size = MeasureTextEx(titleFont, mainText.c_str(), fontSize, spacing);
+
         Vector2 pos = {
-            (GetScreenWidth() - textSize.x) / 2.0f, 
-            (GetScreenHeight() / 2.0f) - 80.0f
-        };
-        DrawTextEx(myFont, "CHECKMATE", pos, 50, 2, RED);
+            (GetScreenWidth() - size.x) / 2.0f,
+            (float)GetScreenHeight() / 2 - 140};
 
-        std::string winnerText = winner + " Wins!";
-        Vector2 winnerSize = MeasureTextEx(myFont, winnerText.c_str(), 30, 2);
-        Vector2 winnerPos = {
-            (GetScreenWidth() - winnerSize.x) / 2.0f,
-            (GetScreenHeight() / 2.0f) - 20.0f
-        };
-        DrawTextEx(myFont, winnerText.c_str(), winnerPos, 30, 2, WHITE);
+        // Shadow
+        DrawTextEx(titleFont, mainText.c_str(),
+                   Vector2{pos.x + 3.0f, pos.y + 3.0f},
+                   fontSize, spacing,
+                   Color{0, 0, 0, 180});
 
-    }
-    else if (winner == "NA")
-    {
-        Vector2 drawSize = MeasureTextEx(myFont, "DRAW", 50, 2);
-        Vector2 drawPos = {
-            (GetScreenWidth() - drawSize.x) / 2.0f,
-            (GetScreenHeight() / 2.0f) - 80.0f
-        };
-        DrawTextEx(myFont, "DRAW", drawPos, 50, 2, RED);
-    }
+        DrawTextEx(titleFont, mainText.c_str(),
+                   pos,
+                   fontSize, spacing,
+                   Color{255, 235, 59, 255});
 
-    Rectangle btnRectHome = {
-        (float)GetScreenWidth() / 2 - 60,
-        (float)GetScreenHeight() / 2 + 150,
-        120,
-        50};
+        if (winner != "NA")
+        {
+            std::string text = winner + " Wins!";
 
-    DrawRectangleRounded(btnRectHome, 0.3f, 10, LIGHTGRAY);
-    DrawRectangleLinesEx(btnRectHome, 2, DARKGRAY);
-    Vector2 homeButtonSize = MeasureTextEx(myFont, "HOME", 25, 2);
-    Vector2 resetPos = {
-        btnRectHome.x + (btnRectHome.width - homeButtonSize.x) / 2.0f,
-        btnRectHome.y + 10.0f
-    };
-    DrawTextEx(myFont, "HOME", resetPos, 25, 2, BLACK);
+            float subSize = 40;
+            Vector2 wsize = MeasureTextEx(myFont, text.c_str(), subSize, 2);
 
-    Rectangle btnRectReset = {
-        (float)GetScreenWidth() / 2 - 60,
-        (float)GetScreenHeight() / 2 + 80,
-        120,
-        50};
+            Vector2 wpos = {
+                (GetScreenWidth() - wsize.x) / 2.0f,
+                (float)GetScreenHeight() / 2 - 60};
 
-    DrawRectangleRounded(btnRectReset, 0.3f, 10, LIGHTGRAY);
-    DrawRectangleLinesEx(btnRectReset, 2, DARKGRAY);
-    Vector2 resetSize = MeasureTextEx(myFont, "RESET", 25, 2);
-    Vector2 homeButtonPos = {
-        btnRectReset.x + (btnRectReset.width - resetSize.x) / 2.0f,
-        btnRectReset.y + 10.0f
-    };
-    DrawTextEx(myFont, "RESET", homeButtonPos, 25, 2, BLACK);
+            // Shadow
+            DrawTextEx(myFont, text.c_str(),
+                       {wpos.x + 2, wpos.y + 2},
+                       subSize, 2,
+                       Color{0, 0, 0, 180});
 
-    if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON) && CheckCollisionPointRec(GetMousePosition(), btnRectReset))
-    {
-        ResetGame();
-    }
-    else if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON) && CheckCollisionPointRec(GetMousePosition(), btnRectHome))
-    {
-        matchRunning = false;
+            DrawTextEx(myFont, text.c_str(),
+                       wpos,
+                       subSize, 2,
+                       Color{230, 230, 230, 255});
+        }
+
+        Rectangle btnHome2 = {centerX, (float)GetScreenHeight() / 2 + 80, 120, 50};
+        Rectangle btnReset2 = {centerX, (float)GetScreenHeight() / 2 + 150, 120, 50};
+
+        DrawGradientButton(btnHome2, "HOME", myFont, fontBold,
+                           Color{70, 130, 200, 220},
+                           Color{120, 180, 255, 255});
+
+        DrawGradientButton(btnReset2, "RESET", myFont, fontBold,
+                           Color{180, 70, 70, 220},
+                           Color{255, 100, 100, 255});
+
+        if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON))
+        {
+            Vector2 mouse = GetMousePosition();
+
+            if (CheckCollisionPointRec(mouse, btnReset2))
+            {
+                ResetGame();
+            }
+            else if (CheckCollisionPointRec(mouse, btnHome2))
+            {
+                matchRunning = false;
+            }
+        }
     }
 }
 

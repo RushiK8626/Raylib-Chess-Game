@@ -8,12 +8,12 @@ Piece::Piece() : id(0), texture({0}), col(0), row(0) {}
 
 Piece::Piece(Texture2D texture, int col, int row, int id) :  id(id), texture(texture), col(col), row(row) {}
 
-void Piece::Draw()
+void Piece::Draw(int drawRow, int drawCol)
 {
     Rectangle sourceRec = { 0, 0, (float)texture.width, (float)texture.height };
     Rectangle destRec = {
-        static_cast<float>(col * CELL_SIZE + OFFSET + 10),
-        static_cast<float>(row * CELL_SIZE + OFFSET + 10),
+        static_cast<float>(drawCol * CELL_SIZE + OFFSET + 10),
+        static_cast<float>(drawRow * CELL_SIZE + OFFSET + 10),
         static_cast<float>(CELL_SIZE - 20),
         static_cast<float>(CELL_SIZE - 20)
     };
@@ -54,7 +54,7 @@ bool Piece::IsValidMove(int startX, int startY, int endX, int endY, const GameSt
 
 bool Piece::IsValidPawnMove(int startX, int startY, int endX, int endY, int id, int destId, const GameStateManager& board) const
 {
-    int direction = (id > 0) ? 1 : -1; // White pawns move up, black pawns move down
+    int direction = (id > 0) ? 1 : -1; 
     // Normal forward move
     if (startX == endX && destId == 0) {
         // Single square move

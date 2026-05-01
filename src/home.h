@@ -35,6 +35,7 @@ private:
 	bool startGame = false;
 	Mode selectedMode = NONE;
 	Font font;
+	Font hoverFont;
 	Font titleFont;
 	Font natoSans2; 
 	float animationTimer;

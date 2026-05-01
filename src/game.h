@@ -7,8 +7,11 @@ class HomeScreen;
 
 class Game
 {
+    bool paused;
     std::string winner;
     Font myFont;
+    Font fontBold;
+    Font titleFont;
     std::unique_ptr<Board> board;
     HomeScreen::Mode gameMode;
     

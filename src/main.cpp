@@ -13,6 +13,9 @@ int main()
     srand(time(NULL));
     InitAudioDevice();
     InitWindow(WINDOW_WIDTH, WINDOW_HEIGHT, "Chess Game");
+    Image icon = LoadImage("graphics/icon.png");   
+    SetWindowIcon(icon);                  
+    UnloadImage(icon);
     SetExitKey(0);
     SetTargetFPS(60);
     HomeScreen hs;

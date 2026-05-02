@@ -2,3 +2,4 @@
 *.dsym
 *.out
 main
+.vscode
